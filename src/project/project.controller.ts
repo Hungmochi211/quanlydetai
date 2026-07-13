@@ -39,13 +39,18 @@ export class ProjectController {
         return this.projectService.getMemberById(id);
     }
 
+    @Get('leader/:id')
+    getMemberByRole(@Param('id') id: string) {
+        return this.projectService.getLeaderById(id);
+    }
+
     @Delete('deleteproject/:id')
     deleteProject(@Param("id") id: string) {
         return this.projectService.deleteProject(id);
     }
 
     @Patch('updatedate/:id')
-    updateProjectDate( @Param('id') id: string, @Body() dto: DateDto ) {
+    updateProjectDate(@Param('id') id: string, @Body() dto: DateDto) {
         return this.projectService.updateProjectDate(id, dto);
     }
 

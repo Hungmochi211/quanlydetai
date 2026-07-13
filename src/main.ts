@@ -3,12 +3,12 @@ declare const module: any
 import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
-import { UserModule } from './user/user.module';
-import { AuthModule } from './auth/auth.module';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  app.enableCors(false);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  app.enableCors();
   const config = new DocumentBuilder()
     .setTitle('Cats example')
     .setDescription('The cats API description')
@@ -17,16 +17,12 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
   const documentFactoryApp = () => SwaggerModule.createDocument(app, config);
+  app.useStaticAssets(join(__dirname,'..','uploads'),{
+    prefix: '/uploads',
+  });
+
   SwaggerModule.setup('api', app, documentFactoryApp);
   await app.listen(process.env.PORT ?? 3000);
-
-  // const documentFactoryUser = () => SwaggerModule.createDocument(user, config);
-  // SwaggerModule.setup('api', user, documentFactoryUser);
-  // await user.listen(process.env.PORT ?? 3001);
-
-  // const documentFactoryAuth = () => SwaggerModule.createDocument(auth, config);
-  // SwaggerModule.setup('api', auth, documentFactoryAuth);
-  // await auth.listen(process.env.PORT ?? 3002);
 
   if (module.hot) {
     module.hot.accept();

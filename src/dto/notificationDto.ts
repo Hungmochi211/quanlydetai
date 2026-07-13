@@ -13,5 +13,5 @@ export class NotificationDto {
   NoiDung!: string
 
   @ApiProperty()
-  TgayTao!: Date
+  NgayTao!: Date
 }

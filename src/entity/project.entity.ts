@@ -1,6 +1,8 @@
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn, } from "typeorm";
 import { ThanhVienDT } from "./pjmem.entity";
 import { NguoiHD } from "./teacher.entity";
+import { MocDeTai } from "./progress.entity";
+import { TaiLieu } from "./document.entity";
 
 @Entity('DeTai')
 export class DeTai {
@@ -24,6 +26,9 @@ export class DeTai {
 
     @Column({ type: 'nvarchar', length: 100, nullable: true })
     TrangThai!: string;
+    
+    @Column({ nullable: true })
+    TienDo: number;
 
     @Column({ type: 'datetime', nullable: true })
     NgayBatDau!: Date;
@@ -49,4 +54,10 @@ export class DeTai {
     @ManyToOne(() => NguoiHD, hd => hd.DeTai)
     @JoinColumn({ name: 'idNguoiHD' })
     NguoiHD!: NguoiHD
+
+    @OneToMany(() => MocDeTai, (moc) => moc.deTai)
+    dsMoc: MocDeTai[];
+
+    @OneToMany(() => TaiLieu, (taiLieu) => taiLieu.deTai)
+    dsTaiLieu: TaiLieu[];
 }

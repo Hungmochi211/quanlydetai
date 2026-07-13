@@ -42,6 +42,7 @@ export class ProjectService {
             idNguoiHD: prDto.idNguoiHD,
             MoTa: prDto.MoTa,
             TrangThai: "Chờ phê duyệt",
+            TienDo: 0,
             NgayTao: new Date()
         });
         await this.DTRes.save(project);
@@ -126,8 +127,23 @@ export class ProjectService {
     async getMemberById(id: string) {
         const mem = await this.TVDTRes.find({
             where: { MaDT: id.trim() },
+            relations: ['NguoiDung'],
+            select:{
+                NguoiDung:{
+                    TenDayDu: true,
+                    VaiTro: true
+                }
+            }
         });
         return mem
+    }
+
+    async getLeaderById(id: string) {
+        var role = "Nhóm trưởng";
+        const leader = await this.TVDTRes.findOne({
+            where: { MaDT: id.trim(), VaiTroDT: role.trim() },
+        });
+        return leader;
     }
 
     async updateProjectDate(id: string, dto: DateDto) {
@@ -136,12 +152,23 @@ export class ProjectService {
         if (!project) {
             throw new NotFoundException("Không tìm thấy đề tài này");
         }
-        
+
         // Chỉ cập nhật field nào được truyền vào
         if (dto.NgayBatDau) project.NgayBatDau = new Date(dto.NgayBatDau);
         if (dto.NgayKetThuc) project.NgayKetThuc = new Date(dto.NgayKetThuc);
         if (dto.NgayXetDuyet) project.NgayXetDuyet = new Date(dto.NgayXetDuyet);
 
+        return this.DTRes.save(project);
+    }
+
+    async updateTienDoProject(id: string, TD: number) {
+        const project = await this.DTRes.findOne({ where: { MaDT: id } });
+
+        if (!project) {
+            throw new NotFoundException("Không tìm thấy đề tài này");
+        }
+
+        project.TienDo = TD;
         return this.DTRes.save(project);
     }
 }

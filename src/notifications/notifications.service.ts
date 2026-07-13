@@ -1,4 +1,4 @@
-import { Injectable,forwardRef,Inject, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, forwardRef, Inject, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { NotificationDto } from '../dto/notificationDto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ThongBao } from 'src/entity/notification.entity';
@@ -16,7 +16,7 @@ export class NotificationsService {
     private userRes: Repository<NguoiDung>,
   ) { }
 
-  async create(user: any,createNotificationDto: NotificationDto) {
+  async create(user: any, createNotificationDto: NotificationDto) {
 
     //kiem tra
     const sender = await this.userRes.findOne({
@@ -27,13 +27,25 @@ export class NotificationsService {
       where: { TaiKhoan: createNotificationDto.TkNguoiNhan }
     });
 
-    if(!render || !sender) {
+    let adminSender = "Hệ thống";
+
+    if (!render || !sender) {
       throw new error("Tài khoản không tồn tại")
+    }
+
+    if (user && user.TaiKhoan) {
+      const sender = await this.userRes.findOne({
+        where: { TaiKhoan: user.TaiKhoan }
+      });
+      if (!sender) {
+        throw new Error("Tài khoản người gửi không tồn tại");
+      }
+      adminSender = sender.TaiKhoan;
     }
 
     //luu giu lieu vao database
     const notifi = this.TBRes.create({
-      TaiKhoan: user.TaiKhoan,
+      TaiKhoan: adminSender,
       TkNguoiNhan: createNotificationDto.TkNguoiNhan,
       TieuDe: createNotificationDto.TieuDe,
       NoiDung: createNotificationDto.NoiDung,
@@ -44,8 +56,8 @@ export class NotificationsService {
     return saveNoti;
   }
 
-  async getNotification(taikhoan: string){
-    const reslut  = this.TBRes.find({
+  async getNotification(taikhoan: string) {
+    const reslut = this.TBRes.find({
       where: {
         TkNguoiNhan: taikhoan,
       },
@@ -57,12 +69,12 @@ export class NotificationsService {
     return reslut;
   }
 
-  async changeState(id: number,user: any){
-    const changeNoti = await  this.TBRes.findOne({
-      where: {idThongBao: id}
+  async changeState(id: number, user: any) {
+    const changeNoti = await this.TBRes.findOne({
+      where: { idThongBao: id }
     });
 
-    if(!changeNoti){
+    if (!changeNoti) {
       throw new NotFoundException("Không tìm thấy thông báo này")
     }
     changeNoti!.TrangThai = true;
@@ -75,10 +87,10 @@ export class NotificationsService {
 
   async removeNotification(id: number) {
     const notifi = await this.TBRes.findOne({
-      where: {idThongBao: id}
+      where: { idThongBao: id }
     });
 
-    if(!notifi) {
+    if (!notifi) {
       throw new NotFoundException("không tìm thấy thông báo!")
     }
 

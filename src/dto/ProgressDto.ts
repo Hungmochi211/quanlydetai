@@ -1,34 +1,33 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateMocDeTaiDto {
+  @ApiProperty()
+  MaDT: string;
 
-    @ApiProperty()
-    MaDT: string;
+  @ApiProperty()
+  TenMoc: string;
 
-    @ApiProperty()
-    TenMoc: string;
+  @ApiProperty()
+  MoTa?: string;
 
-    @ApiProperty()
-    MoTa?: string;
+  @ApiProperty()
+  ThuTu: number;
 
-    @ApiProperty()
-    ThuTu: number;
+  @ApiProperty()
+  TrongSo: number;
 
-    @ApiProperty()
-    TrongSo: number;
+  @ApiProperty()
+  GhiChu?: string;
 
-    @ApiProperty()
-    GhiChu?: string;
+  @ApiProperty()
+  TrangThai: string;
 
-    @ApiProperty()
-    TrangThai: string;
+  @ApiProperty()
+  NgayBatDau: Date;
 
-    @ApiProperty()
-    NgayBatDau: Date;
+  @ApiProperty()
+  NgayKetThuc: Date;
 
-    @ApiProperty()
-    NgayKetThuc: Date;
-
-    @ApiProperty()
-    ThanhVienIds!: number[];
+  @ApiProperty()
+  ThanhVienIds!: number[];
 }

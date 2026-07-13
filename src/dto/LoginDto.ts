@@ -1,10 +1,9 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty } from '@nestjs/swagger';
 
 export class LoginDto {
+  @ApiProperty()
+  TaiKhoan!: string;
 
-    @ApiProperty()
-    TaiKhoan!: string;
-
-    @ApiProperty()
-    MatKhau!: string;
+  @ApiProperty()
+  MatKhau!: string;
 }

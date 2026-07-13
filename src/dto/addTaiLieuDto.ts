@@ -1,16 +1,19 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty } from '@nestjs/swagger';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class AddTaiLieuDto {
+  @ApiProperty()
+  @IsString()
+  @MaxLength(50)
+  MaDT: string;
 
-    @ApiProperty()
-    MaDT?: string;
+  @ApiProperty()
+  @IsOptional()
+  MaMoc?: number | string;
 
-    @ApiProperty()
-    MaMoc?: number;
-
-    @ApiProperty()
-    NguoiGui: string;
-
-    @ApiProperty()
-    LoaiTaiLieu?: string;
+  @ApiProperty()
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  LoaiTaiLieu?: string;
 }

@@ -1,4 +1,10 @@
-import { Injectable, forwardRef, Inject, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  forwardRef,
+  Inject,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { NotificationDto } from '../dto/notificationDto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ThongBao } from 'src/entity/notification.entity';
@@ -14,31 +20,30 @@ export class NotificationsService {
 
     @InjectRepository(NguoiDung)
     private userRes: Repository<NguoiDung>,
-  ) { }
+  ) {}
 
   async create(user: any, createNotificationDto: NotificationDto) {
-
     //kiem tra
     const sender = await this.userRes.findOne({
-      where: { TaiKhoan: user.TaiKhoan }
+      where: { TaiKhoan: user.TaiKhoan },
     });
 
     const render = await this.userRes.findOne({
-      where: { TaiKhoan: createNotificationDto.TkNguoiNhan }
+      where: { TaiKhoan: createNotificationDto.TkNguoiNhan },
     });
 
-    let adminSender = "Hệ thống";
+    let adminSender = 'Hệ thống';
 
     if (!render || !sender) {
-      throw new error("Tài khoản không tồn tại")
+      throw new error('Tài khoản không tồn tại');
     }
 
     if (user && user.TaiKhoan) {
       const sender = await this.userRes.findOne({
-        where: { TaiKhoan: user.TaiKhoan }
+        where: { TaiKhoan: user.TaiKhoan },
       });
       if (!sender) {
-        throw new Error("Tài khoản người gửi không tồn tại");
+        throw new Error('Tài khoản người gửi không tồn tại');
       }
       adminSender = sender.TaiKhoan;
     }
@@ -49,7 +54,7 @@ export class NotificationsService {
       TkNguoiNhan: createNotificationDto.TkNguoiNhan,
       TieuDe: createNotificationDto.TieuDe,
       NoiDung: createNotificationDto.NoiDung,
-      NgayTao: new Date()
+      NgayTao: new Date(),
     });
 
     const saveNoti = await this.TBRes.save(notifi);
@@ -62,22 +67,22 @@ export class NotificationsService {
         TkNguoiNhan: taikhoan,
       },
       order: {
-        idThongBao: "DESC",
-      }
-    })
+        idThongBao: 'DESC',
+      },
+    });
 
     return reslut;
   }
 
   async changeState(id: number, user: any) {
     const changeNoti = await this.TBRes.findOne({
-      where: { idThongBao: id }
+      where: { idThongBao: id },
     });
 
     if (!changeNoti) {
-      throw new NotFoundException("Không tìm thấy thông báo này")
+      throw new NotFoundException('Không tìm thấy thông báo này');
     }
-    changeNoti!.TrangThai = true;
+    changeNoti.TrangThai = true;
     return this.TBRes.save(changeNoti);
   }
 
@@ -87,19 +92,19 @@ export class NotificationsService {
 
   async removeNotification(id: number) {
     const notifi = await this.TBRes.findOne({
-      where: { idThongBao: id }
+      where: { idThongBao: id },
     });
 
     if (!notifi) {
-      throw new NotFoundException("không tìm thấy thông báo!")
+      throw new NotFoundException('không tìm thấy thông báo!');
     }
 
     return this.TBRes.delete(notifi);
   }
 
-  async removeNotifications(ids: Number[]) {
+  async removeNotifications(ids: number[]) {
     await this.TBRes.delete({
-      idThongBao: In(ids)
+      idThongBao: In(ids),
     });
   }
 }

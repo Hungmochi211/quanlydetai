@@ -13,9 +13,16 @@ import { ThanhVienMocDT } from 'src/entity/pgmem.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([MocDeTai, ThongBao, NguoiDung, DeTai, ThanhVienDT, ThanhVienMocDT])
+    TypeOrmModule.forFeature([
+      MocDeTai,
+      ThongBao,
+      NguoiDung,
+      DeTai,
+      ThanhVienDT,
+      ThanhVienMocDT,
+    ]),
   ],
   controllers: [ProgressController],
-  providers: [ProgressService, NotificationsService, ProjectService]
+  providers: [ProgressService, NotificationsService, ProjectService],
 })
-export class ProgressModule { }
+export class ProgressModule {}

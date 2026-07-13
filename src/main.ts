@@ -1,4 +1,4 @@
-declare const module: any
+declare const module: any;
 
 import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -17,7 +17,7 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
   const documentFactoryApp = () => SwaggerModule.createDocument(app, config);
-  app.useStaticAssets(join(__dirname,'..','uploads'),{
+  app.useStaticAssets(join(__dirname, '..', 'uploads'), {
     prefix: '/uploads',
   });
 

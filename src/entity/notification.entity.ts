@@ -1,31 +1,36 @@
-import { Entity, Column, ManyToMany, JoinColumn, PrimaryGeneratedColumn } from "typeorm";
-import { NguoiDung } from "./user.entity";
+import {
+  Entity,
+  Column,
+  ManyToMany,
+  JoinColumn,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import { NguoiDung } from './user.entity';
 
 @Entity('ThongBao')
 export class ThongBao {
+  @PrimaryGeneratedColumn()
+  idThongBao!: number;
 
-    @PrimaryGeneratedColumn()
-    idThongBao!: number
+  @Column({ type: 'varchar', length: 50, nullable: false })
+  TaiKhoan!: string;
 
-    @Column({ type: 'varchar', length: 50, nullable: false })
-    TaiKhoan!: string
+  @Column({ type: 'varchar', length: 50, nullable: false })
+  TkNguoiNhan!: string;
 
-    @Column({ type: 'varchar', length: 50, nullable: false })
-    TkNguoiNhan!: string
+  @Column({ type: 'nvarchar', length: 'MAX', nullable: true })
+  TieuDe!: string;
 
-    @Column({ type: "nvarchar", length: "MAX", nullable: true })
-    TieuDe!: string
+  @Column({ type: 'nvarchar', length: 'MAX', nullable: false })
+  NoiDung!: string;
 
-    @Column({ type: 'nvarchar', length: 'MAX', nullable: false })
-    NoiDung!: string
+  @Column({ type: 'bit', default: 0 })
+  TrangThai!: boolean;
 
-    @Column({ type: 'bit', default: 0 })
-    TrangThai!: boolean
+  @Column({ type: 'datetime', default: () => 'GETDATE()' })
+  NgayTao!: Date;
 
-    @Column({ type: 'datetime', default: () => 'GETDATE()' })
-    NgayTao!: Date
-
-    @ManyToMany(() => NguoiDung, nd => nd.ThongBao)
-    @JoinColumn({ name: 'TaiKhoan' })
-    NguoiDung!: NguoiDung
+  @ManyToMany(() => NguoiDung, (nd) => nd.ThongBao)
+  @JoinColumn({ name: 'TaiKhoan' })
+  NguoiDung!: NguoiDung;
 }

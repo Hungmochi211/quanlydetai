@@ -21,26 +21,43 @@ import { TaiLieu } from './entity/document.entity';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThanhVienMocDT } from './entity/pgmem.entity';
 
-
 @Module({
-  imports: [ScheduleModule.forRoot(), AuthModule, UserModule, SpecModule, ProjectModule, NotificationsModule, ProgressModule, DocumentsModule,
-  TypeOrmModule.forRoot({
-    type: 'mssql',
-    host: 'localhost',
-    port: 1433,
-    username: 'hungmochi211',
-    password: 'Hung',
-    database: 'QuanLyDeTai',
-    entities: [NguoiDung, ChuyenNganh, PhanLoai, NguoiHD, DeTai, ThanhVienDT, ThongBao, MocDeTai, TaiLieu, ThanhVienMocDT],
-    synchronize: false,
-    options: {
-      encrypt: false,
-      trustServerCertificate: true,
-    }
-  }),
+  imports: [
+    ScheduleModule.forRoot(),
+    AuthModule,
+    UserModule,
+    SpecModule,
+    ProjectModule,
+    NotificationsModule,
+    ProgressModule,
+    DocumentsModule,
+    TypeOrmModule.forRoot({
+      type: 'mssql',
+      host: 'localhost',
+      port: 1433,
+      username: 'truong123',
+      password: '190905',
+      database: 'QuanLyDeTai',
+      entities: [
+        NguoiDung,
+        ChuyenNganh,
+        PhanLoai,
+        NguoiHD,
+        DeTai,
+        ThanhVienDT,
+        ThongBao,
+        MocDeTai,
+        TaiLieu,
+        ThanhVienMocDT,
+      ],
+      synchronize: false,
+      options: {
+        encrypt: false,
+        trustServerCertificate: true,
+      },
+    }),
   ],
   controllers: [AppController],
-  providers: [AppService,
-  ],
+  providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}

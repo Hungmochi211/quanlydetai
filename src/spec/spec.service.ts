@@ -15,46 +15,50 @@ export class SpecService {
     private speclistRes: Repository<PhanLoai>,
 
     @InjectRepository(NguoiHD)
-    private teacherRes: Repository<NguoiHD>
-  ) { }
+    private teacherRes: Repository<NguoiHD>,
+  ) {}
 
   async findAll() {
     return this.specRes.find();
   }
 
-  async findSpecList(idspec:string){
-    if(!idspec) return [];
+  async findSpecList(idspec: string) {
+    if (!idspec) return [];
 
     const speclistfind = await this.speclistRes.find({
-      where: {idChuyenNganh: idspec},
-      select: ["idPhanLoai","TenPhanLoai","idChuyenNganh"],
+      where: { idChuyenNganh: idspec },
+      select: ['idPhanLoai', 'TenPhanLoai', 'idChuyenNganh'],
       take: 10,
-    })
+    });
 
     return speclistfind;
   }
 
-  async getTeacher(teacherkey?: string){
-    const listTC = await this.teacherRes.find({relations: ['NguoiDung'],});
-    const filName = teacherkey?listTC.filter(x=>(x.NguoiDung.TenDayDu + "" + x.HocHamHocVi)
-    .toLowerCase()
-    .includes(teacherkey.toLowerCase())):listTC;
+  async getTeacher(teacherkey?: string) {
+    const listTC = await this.teacherRes.find({ relations: ['NguoiDung'] });
+    const filName = teacherkey
+      ? listTC.filter((x) =>
+          (x.NguoiDung.TenDayDu + '' + x.HocHamHocVi)
+            .toLowerCase()
+            .includes(teacherkey.toLowerCase()),
+        )
+      : listTC;
 
-    return filName.map((x)=>({
+    return filName.map((x) => ({
       value: x.idNguoiHD,
-      label: `${x.HocHamHocVi}. ${x.NguoiDung.TenDayDu}`
+      label: `${x.HocHamHocVi}. ${x.NguoiDung.TenDayDu}`,
     }));
   }
 
-  async getTeacherBySpec(id?:string){
+  async getTeacherBySpec(id?: string) {
     const listfind = await this.teacherRes.find({
-      where: {idChuyenNganh: id},
-      relations: ['NguoiDung','ChuyenNganh'],
+      where: { idChuyenNganh: id },
+      relations: ['NguoiDung', 'ChuyenNganh'],
     });
 
-    return listfind.map((x)=>({
+    return listfind.map((x) => ({
       value: x.idNguoiHD,
-      label: `${x.HocHamHocVi}. ${x.NguoiDung.TenDayDu}`
+      label: `${x.HocHamHocVi}. ${x.NguoiDung.TenDayDu}`,
     }));
   }
 }

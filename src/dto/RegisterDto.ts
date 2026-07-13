@@ -1,13 +1,12 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty } from '@nestjs/swagger';
 
 export class RegisterDto {
+  @ApiProperty()
+  Gmail!: string;
 
-    @ApiProperty()
-    Gmail!: string;
+  @ApiProperty()
+  TaiKhoan!: string;
 
-    @ApiProperty()
-    TaiKhoan!: string;
-
-    @ApiProperty()
-    MatKhau!: string;
+  @ApiProperty()
+  MatKhau!: string;
 }

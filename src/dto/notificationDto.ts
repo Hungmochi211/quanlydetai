@@ -1,17 +1,15 @@
-import { ApiProperty } from "@nestjs/swagger";
-
+import { ApiProperty } from '@nestjs/swagger';
 
 export class NotificationDto {
+  @ApiProperty()
+  TkNguoiNhan!: string;
 
   @ApiProperty()
-  TkNguoiNhan!: string
+  TieuDe!: string;
 
   @ApiProperty()
-  TieuDe!: string
+  NoiDung!: string;
 
   @ApiProperty()
-  NoiDung!: string
-
-  @ApiProperty()
-  NgayTao!: Date
+  NgayTao!: Date;
 }

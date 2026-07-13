@@ -1,74 +1,173 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { existsSync, unlinkSync } from 'fs';
-import { join } from 'path';
+import { existsSync, promises as fs } from 'fs';
+import { basename, join } from 'path';
 import { AddTaiLieuDto } from 'src/dto/addTaiLieuDto';
 import { TaiLieu } from 'src/entity/document.entity';
+import { ThanhVienDT } from 'src/entity/pjmem.entity';
+import { MocDeTai } from 'src/entity/progress.entity';
 import { Repository } from 'typeorm';
 
 @Injectable()
 export class DocumentsService {
-    constructor(
-        @InjectRepository(TaiLieu)
-        private TLRes: Repository<TaiLieu>,
-    ) { }
+  constructor(
+    @InjectRepository(TaiLieu)
+    private readonly taiLieuRepository: Repository<TaiLieu>,
+    @InjectRepository(ThanhVienDT)
+    private readonly thanhVienRepository: Repository<ThanhVienDT>,
+    @InjectRepository(MocDeTai)
+    private readonly mocRepository: Repository<MocDeTai>,
+  ) {}
 
-    async upload(dto: AddTaiLieuDto, file: Express.Multer.File): Promise<TaiLieu> {
-        const taiLieu = this.TLRes.create({
-            MaDT: dto.MaDT,
-            MaMoc: dto.MaMoc,
-            NguoiGui: dto.NguoiGui,
-            LoaiTaiLieu: dto.LoaiTaiLieu,
-            TenFile: file.originalname,
-            FilePath: `/uploads/documents/${file.filename}`,
-        });
-
-        return this.TLRes.save(taiLieu);
+  async upload(
+    dto: AddTaiLieuDto,
+    file: Express.Multer.File,
+    taiKhoan: string,
+  ): Promise<TaiLieu> {
+    const maDT = dto.MaDT?.trim();
+    if (!maDT) {
+      throw new BadRequestException('Mã đề tài là bắt buộc');
     }
 
-    async findOne(id: number): Promise<TaiLieu> {
-        const taiLieu = await this.TLRes.findOne({ where: { MaTL: id } });
-        if (!taiLieu) {
-            throw new NotFoundException(`Không tìm thấy tài liệu với id = ${id}`);
-        }
-        return taiLieu;
+    await this.getMemberOrThrow(maDT, taiKhoan);
+    const maMoc = await this.validateMilestone(dto.MaMoc, maDT);
+
+    const taiLieu = this.taiLieuRepository.create({
+      MaDT: maDT,
+      MaMoc: maMoc,
+      NguoiGui: taiKhoan,
+      LoaiTaiLieu: dto.LoaiTaiLieu?.trim(),
+      TenFile: file.originalname,
+      // Chỉ lưu tên file để không thể đưa đường dẫn tùy ý vào cơ sở dữ liệu.
+      FilePath: file.filename,
+    });
+
+    try {
+      return await this.taiLieuRepository.save(taiLieu);
+    } catch (error) {
+      await fs.unlink(file.path).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  async findOne(id: number, taiKhoan: string): Promise<TaiLieu> {
+    const taiLieu = await this.findOneById(id);
+    await this.getMemberOrThrow(taiLieu.MaDT, taiKhoan);
+    return taiLieu;
+  }
+
+  async getPhysicalPath(
+    id: number,
+    taiKhoan: string,
+  ): Promise<{ path: string; tenFile: string }> {
+    const taiLieu = await this.findOne(id, taiKhoan);
+    const physicalPath = this.getPhysicalPathForDocument(taiLieu);
+
+    if (!existsSync(physicalPath)) {
+      throw new NotFoundException('File không tồn tại trên server');
     }
 
-    async getPhysicalPath(id: number): Promise<{ path: string, tenFile: string }> {
-        const fileIsFound = await this.findOne(id);
-        const physicalPath = join(process.cwd(), fileIsFound.FilePath);
+    return { path: physicalPath, tenFile: taiLieu.TenFile };
+  }
 
-        if (!existsSync(physicalPath)) {
-            throw new NotFoundException('File không tồn tại trên server');
-        }
+  async findByDeTai(maDT: string, taiKhoan: string): Promise<TaiLieu[]> {
+    await this.getMemberOrThrow(maDT, taiKhoan);
+    return this.taiLieuRepository.find({
+      where: { MaDT: maDT },
+      order: { NgayTaiLen: 'DESC' },
+    });
+  }
 
-        return { path: physicalPath, tenFile: fileIsFound.TenFile };
+  async findByMoc(maMoc: number, taiKhoan: string): Promise<TaiLieu[]> {
+    const moc = await this.mocRepository.findOne({ where: { MaMoc: maMoc } });
+    if (!moc) {
+      throw new NotFoundException(`Không tìm thấy mốc với id = ${maMoc}`);
     }
 
-    async findByDeTai(maDT: string): Promise<TaiLieu[]> {
-        return this.TLRes.find({
-            where: { MaDT: maDT },
-            order: { NgayTaiLen: 'DESC' },
-        });
+    await this.getMemberOrThrow(moc.MaDT, taiKhoan);
+    return this.taiLieuRepository.find({
+      where: { MaMoc: maMoc },
+      order: { NgayTaiLen: 'DESC' },
+    });
+  }
+
+  async remove(id: number, taiKhoan: string): Promise<void> {
+    const taiLieu = await this.findOneById(id);
+    const thanhVien = await this.getMemberOrThrow(taiLieu.MaDT, taiKhoan);
+    const isNhomTruong = this.normalizeRole(thanhVien.VaiTroDT).includes(
+      'nhom truong',
+    );
+
+    if (taiLieu.NguoiGui !== taiKhoan && !isNhomTruong) {
+      throw new ForbiddenException('Bạn không có quyền xóa tài liệu này');
     }
 
-    async findByMoc(maMoc: number): Promise<TaiLieu[]> {
-        return this.TLRes.find({
-            where: { MaMoc: maMoc },
-            order: { NgayTaiLen: 'DESC' },
-        });
+    await this.taiLieuRepository.remove(taiLieu);
+    await fs.unlink(this.getPhysicalPathForDocument(taiLieu)).catch(() => undefined);
+  }
+
+  private async findOneById(id: number): Promise<TaiLieu> {
+    const taiLieu = await this.taiLieuRepository.findOne({
+      where: { MaTL: id },
+    });
+    if (!taiLieu) {
+      throw new NotFoundException(`Không tìm thấy tài liệu với id = ${id}`);
+    }
+    return taiLieu;
+  }
+
+  private async getMemberOrThrow(
+    maDT: string,
+    taiKhoan: string,
+  ): Promise<ThanhVienDT> {
+    const thanhVien = await this.thanhVienRepository.findOne({
+      where: { MaDT: maDT, TaiKhoan: taiKhoan },
+    });
+    if (!thanhVien) {
+      throw new ForbiddenException('Bạn không thuộc đề tài này');
+    }
+    return thanhVien;
+  }
+
+  private async validateMilestone(
+    rawMaMoc: number | string | undefined,
+    maDT: string,
+  ): Promise<number | undefined> {
+    if (rawMaMoc === undefined || rawMaMoc === null || rawMaMoc === '') {
+      return undefined;
     }
 
-    async remove(id: number): Promise<void> {
-        const taiLieu = await this.findOne(id);
-        const physicalPath = join(process.cwd(), taiLieu.FilePath);
-
-        if (existsSync(physicalPath)) {
-            unlinkSync(physicalPath);
-        }
-
-        await this.TLRes.remove(taiLieu);
+    const maMoc = Number(rawMaMoc);
+    if (!Number.isInteger(maMoc)) {
+      throw new BadRequestException('Mã mốc không hợp lệ');
     }
 
+    const moc = await this.mocRepository.findOne({ where: { MaMoc: maMoc } });
+    if (!moc || moc.MaDT !== maDT) {
+      throw new BadRequestException('Mốc tiến độ không thuộc đề tài này');
+    }
+    return maMoc;
+  }
 
+  private getPhysicalPathForDocument(taiLieu: TaiLieu): string {
+    const fileName = basename(taiLieu.FilePath);
+    const isLegacyPublicFile = taiLieu.FilePath.includes('uploads/documents');
+    const directory = isLegacyPublicFile
+      ? join('uploads', 'documents')
+      : join('private-uploads', 'documents');
+    return join(process.cwd(), directory, fileName);
+  }
+
+  private normalizeRole(role: string): string {
+    return role
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+  }
 }

@@ -6,10 +6,8 @@ import { ThanhVienDT } from 'src/entity/pjmem.entity';
 import { DeTai } from 'src/entity/project.entity';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([ThanhVienDT,DeTai])
-  ],
+  imports: [TypeOrmModule.forFeature([ThanhVienDT, DeTai])],
   controllers: [ProjectController],
-  providers: [ProjectService]
+  providers: [ProjectService],
 })
 export class ProjectModule {}

@@ -7,11 +7,9 @@ import { NguoiDung } from 'src/entity/user.entity';
 import { NotificationController } from './notifications.controller';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([ThongBao,NguoiDung]),
-  ],
+  imports: [TypeOrmModule.forFeature([ThongBao, NguoiDung])],
   providers: [NotificationsGateway, NotificationsService],
   controllers: [NotificationController],
-  exports: [NotificationsGateway,NotificationsService]
+  exports: [NotificationsGateway, NotificationsService],
 })
 export class NotificationsModule {}

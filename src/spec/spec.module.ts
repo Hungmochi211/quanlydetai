@@ -7,9 +7,7 @@ import { PhanLoai } from 'src/entity/speclist.entity';
 import { NguoiHD } from 'src/entity/teacher.entity';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([ChuyenNganh,PhanLoai,NguoiHD]),
-  ],
+  imports: [TypeOrmModule.forFeature([ChuyenNganh, PhanLoai, NguoiHD])],
   controllers: [SpecController],
   providers: [SpecService],
 })

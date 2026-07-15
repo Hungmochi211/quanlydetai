@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { ProgressController } from './progress.controller';
 import { ProgressService } from './progress.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -10,6 +10,9 @@ import { ProjectService } from 'src/project/project.service';
 import { DeTai } from 'src/entity/project.entity';
 import { ThanhVienDT } from 'src/entity/pjmem.entity';
 import { ThanhVienMocDT } from 'src/entity/pgmem.entity';
+import { DocumentsModule } from 'src/documents/documents.module';
+import { TaiLieu } from 'src/entity/document.entity';
+import { XetDuyetDeTai } from 'src/entity/project-approval.entity';
 
 @Module({
   imports: [
@@ -17,12 +20,16 @@ import { ThanhVienMocDT } from 'src/entity/pgmem.entity';
       MocDeTai,
       ThongBao,
       NguoiDung,
+      XetDuyetDeTai,
       DeTai,
       ThanhVienDT,
       ThanhVienMocDT,
+      TaiLieu
     ]),
+    DocumentsModule
   ],
   controllers: [ProgressController],
   providers: [ProgressService, NotificationsService, ProjectService],
+  exports: [ProgressService]
 })
-export class ProgressModule {}
+export class ProgressModule { }

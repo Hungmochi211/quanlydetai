@@ -20,6 +20,7 @@ import { DocumentsModule } from './documents/documents.module';
 import { TaiLieu } from './entity/document.entity';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThanhVienMocDT } from './entity/pgmem.entity';
+import { XetDuyetDeTai } from './entity/project-approval.entity';
 
 @Module({
   imports: [
@@ -35,8 +36,8 @@ import { ThanhVienMocDT } from './entity/pgmem.entity';
       type: 'mssql',
       host: 'localhost',
       port: 1433,
-      username: 'truong123',
-      password: '190905',
+      username: 'hungmochi211',
+      password: 'Hung',
       database: 'QuanLyDeTai',
       entities: [
         NguoiDung,
@@ -49,6 +50,7 @@ import { ThanhVienMocDT } from './entity/pgmem.entity';
         MocDeTai,
         TaiLieu,
         ThanhVienMocDT,
+        XetDuyetDeTai,
       ],
       synchronize: false,
       options: {

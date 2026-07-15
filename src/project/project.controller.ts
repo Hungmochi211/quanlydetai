@@ -14,6 +14,7 @@ import { ProjectService } from './project.service';
 import { AuthGuard } from 'src/auth/auth.guard';
 import { RegisterTopicDto } from 'src/dto/RegisterTopicDto';
 import { DateDto } from 'src/dto/DateDto';
+import { ReviewProjectDto, SubmitProjectForApprovalDto } from 'src/dto/ProjectApprovalDto';
 
 @Controller('project')
 @ApiTags('project')
@@ -42,6 +43,29 @@ export class ProjectController {
   @Patch('changestate/:id')
   changeProjectState(@Param('id') id: string, @Body('state') state: string) {
     return this.projectService.changeProjectState(id, state);
+  }
+
+  @Post(':id/submit-for-approval')
+  submitForApproval(
+    @Param('id') id: string,
+    @Req() req,
+    @Body() dto: SubmitProjectForApprovalDto,
+  ) {
+    return this.projectService.submitForApproval(id, req.user.TaiKhoan, dto);
+  }
+
+  @Post(':id/review')
+  reviewProject(
+    @Param('id') id: string,
+    @Req() req,
+    @Body() dto: ReviewProjectDto,
+  ) {
+    return this.projectService.reviewProject(id, req.user.TaiKhoan, dto);
+  }
+
+  @Get(':id/approvals')
+  getApprovals(@Param('id') id: string) {
+    return this.projectService.getApprovals(id);
   }
 
   @Get('member/:id')

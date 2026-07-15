@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -9,20 +10,32 @@ import {
   Post,
   Put,
   Query,
+  Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from 'src/auth/auth.guard';
 import { ProgressService } from './progress.service';
 import { CreateMocDeTaiDto } from 'src/dto/ProgressDto';
 import { UpdateMocDeTaiDto } from 'src/dto/UpdateProgressDto';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { AddTaiLieuDto } from 'src/dto/addTaiLieuDto';
+import { taiLieuMulterOptions } from 'src/documents/multer.config';
+
+interface AuthenticatedRequest {
+  user?: {
+    TaiKhoan?: string;
+  };
+}
 
 @Controller('progress')
 @ApiTags('progress')
 @ApiBearerAuth()
 @UseGuards(AuthGuard)
 export class ProgressController {
-  constructor(private readonly mDTService: ProgressService) {}
+  constructor(private readonly mDTService: ProgressService) { }
 
   @Post('createprogress')
   create(@Body() dto: CreateMocDeTaiDto) {
@@ -55,5 +68,23 @@ export class ProgressController {
   @Get('sumprogess/:maDT')
   async getTienDo(@Param('maDT') maDT: string) {
     return this.mDTService.updateDeTaiProgress(maDT);
+  }
+
+  @Post('submit')
+  @UseInterceptors(FileInterceptor('file', taiLieuMulterOptions))
+  async submitMilestone(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() dto: AddTaiLieuDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.mDTService.submitMilestone(dto, file, this.getTaiKhoan(req),);
+  }
+
+  private getTaiKhoan(req: AuthenticatedRequest): string {
+    const taiKhoan = req.user?.TaiKhoan;
+    if (!taiKhoan) {
+      throw new BadRequestException('Không xác định được tài khoản đăng nhập');
+    }
+    return taiKhoan;
   }
 }

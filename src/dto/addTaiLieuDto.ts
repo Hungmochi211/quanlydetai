@@ -9,7 +9,7 @@ export class AddTaiLieuDto {
 
   @ApiProperty()
   @IsOptional()
-  MaMoc?: number | string;
+  MaMoc?: number;
 
   @ApiProperty()
   @IsOptional()

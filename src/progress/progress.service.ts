@@ -1,8 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
+import { DocumentsService } from 'src/documents/documents.service';
+import { AddTaiLieuDto } from 'src/dto/addTaiLieuDto';
 import { CreateMocDeTaiDto } from 'src/dto/ProgressDto';
 import { UpdateMocDeTaiDto } from 'src/dto/UpdateProgressDto';
+import { TaiLieu } from 'src/entity/document.entity';
 import { ThanhVienMocDT } from 'src/entity/pgmem.entity';
 import { MocDeTai } from 'src/entity/progress.entity';
 import { NotificationsService } from 'src/notifications/notifications.service';
@@ -20,18 +23,42 @@ export class ProgressService {
 
     private readonly NTFService: NotificationsService,
     private readonly deTaiRes: ProjectService,
-  ) {}
+    private readonly TLService: DocumentsService
+  ) { }
 
   async create(dto: CreateMocDeTaiDto): Promise<MocDeTai> {
+
+    // Lấy tất cả mốc của đề tài
+    const mocs = await this.MDTRes.find({
+      where: {
+        MaDT: dto.MaDT,
+      },
+    });
+
+    // Tính tổng trọng số hiện tại
+    const tongTrongSo = mocs.reduce(
+      (sum, moc) => sum + (Number(moc.TrongSo) || 0),
+      0,
+    );
+
+    const trongSoMoi = Number(dto.TrongSo) || 0;
+
+    if (tongTrongSo + trongSoMoi > 100) {
+      throw new BadRequestException(
+        `Tổng trọng số của đề tài sẽ là ${tongTrongSo + trongSoMoi}%, vượt quá 100%.`,
+      );
+    }
+
     const moc = this.MDTRes.create(dto);
     await this.MDTRes.save(moc);
 
     for (const idTV of dto.ThanhVienIds) {
       await this.TVMDTRes.save({
-        moc: moc,
-        thanhVien: { idTV: idTV },
+        moc,
+        thanhVien: { idTV },
       });
     }
+
     return moc;
   }
 
@@ -49,8 +76,27 @@ export class ProgressService {
     if (!moc) {
       throw new NotFoundException(`Không tìm thấy mốc với MaMoc = ${MaMoc}`);
     }
-    Object.assign(moc, dto);
-    return await this.MDTRes.save(moc);
+    const { ThanhVienIds, ...mocData } = dto;
+    Object.assign(moc, mocData);
+    const savedMoc = await this.MDTRes.save(moc);
+
+    // Chỉ thay đổi phân công khi frontend gửi trường này. Điều này tránh
+    // xóa danh sách hiện có ở những lần cập nhật không liên quan.
+    if (ThanhVienIds !== undefined) {
+      const uniqueMemberIds = [...new Set(ThanhVienIds)];
+      await this.TVMDTRes.delete({ moc: { MaMoc } });
+
+      if (uniqueMemberIds.length > 0) {
+        await this.TVMDTRes.save(
+          uniqueMemberIds.map((idTV) => ({
+            moc: savedMoc,
+            thanhVien: { idTV },
+          })),
+        );
+      }
+    }
+
+    return savedMoc;
   }
 
   async remove(MaMoc: number): Promise<{ message: string }> {
@@ -58,12 +104,50 @@ export class ProgressService {
     if (!moc) {
       throw new NotFoundException(`Không tìm thấy mốc với MaMoc = ${MaMoc}`);
     }
-    await this.TVMDTRes.delete({
-      moc: { MaMoc },
+
+    await this.TLService.removeByMilestone(MaMoc);
+    await this.TVMDTRes.delete({ moc: { MaMoc }, });
+    await this.MDTRes.remove(moc);
+    await this.updateDeTaiProgress(moc.MaDT)
+    return { message: `Đã xóa mốc MaMoc = ${MaMoc} thành công` };
+  }
+
+  async submitMilestone( dto: AddTaiLieuDto, file: Express.Multer.File, taiKhoan: string,): Promise<TaiLieu> {
+
+    const taiLieu = await this.TLService.upload( dto, file, taiKhoan,);
+
+    // Nếu upload cho mốc
+    if (dto.MaMoc) {
+      await this.completeMilestone(dto!.MaMoc);
+    }
+
+    return taiLieu;
+  }
+
+  async completeMilestone(MaMoc: number): Promise<MocDeTai> {
+    const moc = await this.MDTRes.findOne({
+      where: { MaMoc },
     });
 
-    await this.MDTRes.remove(moc);
-    return { message: `Đã xóa mốc MaMoc = ${MaMoc} thành công` };
+    if (!moc) {
+      throw new NotFoundException(
+        `Không tìm thấy mốc với MaMoc = ${MaMoc}`,
+      );
+    }
+
+    // Nếu đã hoàn thành thì không cần cập nhật nữa
+    if (moc.TrangThai === 'Hoàn thành') {
+      return moc;
+    }
+
+    moc.TrangThai = 'Hoàn thành';
+
+    const result = await this.MDTRes.save(moc);
+
+    // Cập nhật lại tiến độ đề tài
+    await this.updateDeTaiProgress(result.MaDT);
+
+    return result;
   }
 
   async updateDeTaiProgress(maDT: string): Promise<number> {
@@ -71,28 +155,17 @@ export class ProgressService {
       where: { MaDT: maDT },
     });
 
-    if (mocs.length === 0) return 0;
-
-    let tongTrongSoTatCa = 0;
-    let tongTrongSoHoanThanh = 0;
+    let phanTramTienDo = 0;
 
     for (const moc of mocs) {
-      const trongSo = Number(moc.TrongSo) || 0;
-      tongTrongSoTatCa += trongSo;
-
       if (moc.TrangThai === 'Hoàn thành') {
-        tongTrongSoHoanThanh += trongSo;
+        phanTramTienDo += Number(moc.TrongSo) || 0;
       }
     }
 
-    let phanTramTienDo = 0;
-    if (tongTrongSoTatCa > 0) {
-      phanTramTienDo = Math.round(
-        (tongTrongSoHoanThanh / tongTrongSoTatCa) * 100,
-      );
-    }
+    // Đảm bảo không vượt quá 100%
+    phanTramTienDo = Math.min(phanTramTienDo, 100);
 
-    // Cập nhật vào bảng DeTai
     await this.deTaiRes.updateTienDoProject(maDT, phanTramTienDo);
 
     return phanTramTienDo;

@@ -24,4 +24,7 @@ export class UpdateMocDeTaiDto {
 
   @ApiProperty()
   NgayKetThuc?: Date;
+
+  @ApiProperty({ required: false, type: [Number] })
+  ThanhVienIds?: number[];
 }

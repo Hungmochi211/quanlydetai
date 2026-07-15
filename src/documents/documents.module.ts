@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { DocumentsController } from './documents.controller';
 import { DocumentsService } from './documents.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -10,5 +10,6 @@ import { MocDeTai } from 'src/entity/progress.entity';
   imports: [TypeOrmModule.forFeature([TaiLieu, ThanhVienDT, MocDeTai])],
   controllers: [DocumentsController],
   providers: [DocumentsService],
+  exports: [DocumentsService]
 })
-export class DocumentsModule {}
+export class DocumentsModule { }

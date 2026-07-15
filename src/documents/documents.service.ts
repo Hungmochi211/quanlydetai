@@ -22,7 +22,7 @@ export class DocumentsService {
     private readonly thanhVienRepository: Repository<ThanhVienDT>,
     @InjectRepository(MocDeTai)
     private readonly mocRepository: Repository<MocDeTai>,
-  ) {}
+  ) { }
 
   async upload(
     dto: AddTaiLieuDto,
@@ -35,7 +35,23 @@ export class DocumentsService {
     }
 
     await this.getMemberOrThrow(maDT, taiKhoan);
+
     const maMoc = await this.validateMilestone(dto.MaMoc, maDT);
+
+    // Nếu mốc đã có tài liệu thì thay thế
+    if (maMoc) {
+      const oldDocument = await this.taiLieuRepository.findOne({
+        where: { MaMoc: maMoc },
+      });
+
+      if (oldDocument) {
+        await this.taiLieuRepository.remove(oldDocument);
+
+        await fs
+          .unlink(this.getPhysicalPathForDocument(oldDocument))
+          .catch(() => undefined);
+      }
+    }
 
     const taiLieu = this.taiLieuRepository.create({
       MaDT: maDT,
@@ -43,7 +59,6 @@ export class DocumentsService {
       NguoiGui: taiKhoan,
       LoaiTaiLieu: dto.LoaiTaiLieu?.trim(),
       TenFile: file.originalname,
-      // Chỉ lưu tên file để không thể đưa đường dẫn tùy ý vào cơ sở dữ liệu.
       FilePath: file.filename,
     });
 
@@ -98,16 +113,12 @@ export class DocumentsService {
 
   async remove(id: number, taiKhoan: string): Promise<void> {
     const taiLieu = await this.findOneById(id);
-    const thanhVien = await this.getMemberOrThrow(taiLieu.MaDT, taiKhoan);
-    const isNhomTruong = this.normalizeRole(thanhVien.VaiTroDT).includes(
-      'nhom truong',
-    );
 
-    if (taiLieu.NguoiGui !== taiKhoan && !isNhomTruong) {
-      throw new ForbiddenException('Bạn không có quyền xóa tài liệu này');
-    }
+    // Chỉ kiểm tra người này có thuộc đề tài hay không
+    await this.getMemberOrThrow(taiLieu.MaDT, taiKhoan);
 
     await this.taiLieuRepository.remove(taiLieu);
+
     await fs.unlink(this.getPhysicalPathForDocument(taiLieu)).catch(() => undefined);
   }
 
@@ -152,6 +163,20 @@ export class DocumentsService {
       throw new BadRequestException('Mốc tiến độ không thuộc đề tài này');
     }
     return maMoc;
+  }
+
+  async removeByMilestone(maMoc: number): Promise<void> {
+    const documents = await this.taiLieuRepository.find({
+      where: { MaMoc: maMoc },
+    });
+
+    for (const document of documents) {
+      await fs
+        .unlink(this.getPhysicalPathForDocument(document))
+        .catch(() => undefined);
+
+      await this.taiLieuRepository.remove(document);
+    }
   }
 
   private getPhysicalPathForDocument(taiLieu: TaiLieu): string {

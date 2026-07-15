@@ -4,10 +4,12 @@ import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { ConfigService } from '@nestjs/config';
 import { join } from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const configService = app.get(ConfigService);
   app.enableCors();
   const config = new DocumentBuilder()
     .setTitle('Cats example')
@@ -22,7 +24,7 @@ async function bootstrap() {
   });
 
   SwaggerModule.setup('api', app, documentFactoryApp);
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(Number(configService.get<string>('PORT') ?? 3000));
 
   if (module.hot) {
     module.hot.accept();

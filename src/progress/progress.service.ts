@@ -26,7 +26,8 @@ export class ProgressService {
     private readonly TLService: DocumentsService
   ) { }
 
-  async create(dto: CreateMocDeTaiDto): Promise<MocDeTai> {
+  async create(dto: CreateMocDeTaiDto, taiKhoan: string): Promise<MocDeTai> {
+    await this.deTaiRes.ensureProjectLeader(dto.MaDT, taiKhoan);
 
     // Lấy tất cả mốc của đề tài
     const mocs = await this.MDTRes.find({
@@ -71,7 +72,7 @@ export class ProgressService {
     });
   }
 
-  async update(MaMoc: number, dto: UpdateMocDeTaiDto): Promise<MocDeTai> {
+  async update(MaMoc: number, dto: UpdateMocDeTaiDto, taiKhoan: string): Promise<MocDeTai> {
     const moc = await this.MDTRes.findOne({ where: { MaMoc } });
     if (!moc) {
       throw new NotFoundException(`Không tìm thấy mốc với MaMoc = ${MaMoc}`);
@@ -95,15 +96,17 @@ export class ProgressService {
         );
       }
     }
+    await this.deTaiRes.ensureProjectLeader(moc.MaDT, taiKhoan);
 
     return savedMoc;
   }
 
-  async remove(MaMoc: number): Promise<{ message: string }> {
+  async remove(MaMoc: number, taiKhoan: string): Promise<{ message: string }> {
     const moc = await this.MDTRes.findOne({ where: { MaMoc } });
     if (!moc) {
       throw new NotFoundException(`Không tìm thấy mốc với MaMoc = ${MaMoc}`);
     }
+    await this.deTaiRes.ensureProjectLeader(moc.MaDT, taiKhoan);
 
     await this.TLService.removeByMilestone(MaMoc);
     await this.TVMDTRes.delete({ moc: { MaMoc }, });

@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { NguoiDung } from 'src/entity/user.entity';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { RegisterDto } from 'src/dto/RegisterDto';
 import { UserService } from 'src/user/user.service';
 import bcrypt from 'bcrypt';
@@ -18,6 +19,7 @@ export class AuthService {
   constructor(
     private userService: UserService,
     private jwtService: JwtService,
+    private configService: ConfigService,
 
     @InjectRepository(NguoiDung)
     private userRes: Repository<NguoiDung>,
@@ -73,9 +75,15 @@ export class AuthService {
     user.ResetTokenExpire = new Date(Date.now() + 15 * 60 * 1000);
     await this.userRes.save(user);
 
-    const resetLink = `http://localhost:5173/change-password?token=${token}`;
+    const frontendUrl = this.configService.getOrThrow<string>('FRONTEND_URL');
+    const resetLink = `${frontendUrl}/change-password?token=${token}`;
 
-    await sendMail(gmail, resetLink);
+    await sendMail(
+      gmail,
+      resetLink,
+      this.configService.getOrThrow<string>('MAIL_USER'),
+      this.configService.getOrThrow<string>('MAIL_PASSWORD'),
+    );
 
     return { message: 'Đã gửi đến gmail khôi phục mật khẩu' };
   }

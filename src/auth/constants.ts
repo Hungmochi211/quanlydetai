@@ -1,3 +1,4 @@
 export const jwtConstants = {
-  secret: 'Dasodpaoskdpoaksdpoaksdpasuusisa',
+  // JWT secret is loaded from .env by AuthModule.
+  secret: process.env.JWT_SECRET,
 };

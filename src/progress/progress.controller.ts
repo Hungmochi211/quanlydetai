@@ -38,8 +38,8 @@ export class ProgressController {
   constructor(private readonly mDTService: ProgressService) { }
 
   @Post('createprogress')
-  create(@Body() dto: CreateMocDeTaiDto) {
-    return this.mDTService.create(dto);
+  create(@Body() dto: CreateMocDeTaiDto, @Req() req: AuthenticatedRequest) {
+    return this.mDTService.create(dto, this.getTaiKhoan(req));
   }
 
   @Get('getprogress')
@@ -50,13 +50,14 @@ export class ProgressController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateMocDeTaiDto,
+    @Req() req: AuthenticatedRequest,
   ) {
-    return this.mDTService.update(id, dto);
+    return this.mDTService.update(id, dto, this.getTaiKhoan(req));
   }
 
   @Delete('deleteprogress/:id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.mDTService.remove(id);
+  remove(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
+    return this.mDTService.remove(id, this.getTaiKhoan(req));
   }
 
   @Get('member/:maMoc')

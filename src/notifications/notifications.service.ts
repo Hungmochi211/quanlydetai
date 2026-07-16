@@ -10,7 +10,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { ThongBao } from 'src/entity/notification.entity';
 import { In, Repository } from 'typeorm';
 import { NguoiDung } from 'src/entity/user.entity';
-import { error } from 'console';
 
 @Injectable()
 export class NotificationsService {
@@ -23,34 +22,29 @@ export class NotificationsService {
   ) {}
 
   async create(user: any, createNotificationDto: NotificationDto) {
-    //kiem tra
-    const sender = await this.userRes.findOne({
-      where: { TaiKhoan: user.TaiKhoan },
-    });
-
-    const render = await this.userRes.findOne({
+    const recipient = await this.userRes.findOne({
       where: { TaiKhoan: createNotificationDto.TkNguoiNhan },
     });
 
-    let adminSender = 'Hệ thống';
-
-    if (!render || !sender) {
-      throw new error('Tài khoản không tồn tại');
+    if (!recipient) {
+      throw new NotFoundException('Tài khoản người nhận không tồn tại');
     }
+
+    let senderAccount = 'Hệ thống';
 
     if (user && user.TaiKhoan) {
       const sender = await this.userRes.findOne({
         where: { TaiKhoan: user.TaiKhoan },
       });
       if (!sender) {
-        throw new Error('Tài khoản người gửi không tồn tại');
+        throw new NotFoundException('Tài khoản người gửi không tồn tại');
       }
-      adminSender = sender.TaiKhoan;
+      senderAccount = sender.TaiKhoan;
     }
 
     //luu giu lieu vao database
     const notifi = this.TBRes.create({
-      TaiKhoan: adminSender,
+      TaiKhoan: senderAccount,
       TkNguoiNhan: createNotificationDto.TkNguoiNhan,
       TieuDe: createNotificationDto.TieuDe,
       NoiDung: createNotificationDto.NoiDung,
@@ -82,6 +76,9 @@ export class NotificationsService {
     if (!changeNoti) {
       throw new NotFoundException('Không tìm thấy thông báo này');
     }
+    if (changeNoti.TkNguoiNhan !== user.TaiKhoan) {
+      throw new ForbiddenException('Bạn không có quyền đọc thông báo này');
+    }
     changeNoti.TrangThai = true;
     return this.TBRes.save(changeNoti);
   }
@@ -90,7 +87,7 @@ export class NotificationsService {
     return `This action updates a #${id} notification`;
   }
 
-  async removeNotification(id: number) {
+  async removeNotification(id: number, taiKhoan: string) {
     const notifi = await this.TBRes.findOne({
       where: { idThongBao: id },
     });
@@ -98,13 +95,17 @@ export class NotificationsService {
     if (!notifi) {
       throw new NotFoundException('không tìm thấy thông báo!');
     }
+    if (notifi.TkNguoiNhan !== taiKhoan) {
+      throw new ForbiddenException('Bạn không có quyền xóa thông báo này');
+    }
 
     return this.TBRes.delete(notifi);
   }
 
-  async removeNotifications(ids: number[]) {
+  async removeNotifications(ids: number[], taiKhoan: string) {
     await this.TBRes.delete({
       idThongBao: In(ids),
+      TkNguoiNhan: taiKhoan,
     });
   }
 }

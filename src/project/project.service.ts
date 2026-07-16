@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -34,13 +35,28 @@ export class ProjectService {
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase()
+      .replace(/đ/g, 'd')
       .trim();
   }
 
-  private async requireProjectLeader(maDT: string, taiKhoan: string) {
+  async ensureProjectLeader(maDT: string, taiKhoan: string) {
     const member = await this.TVDTRes.findOne({ where: { MaDT: maDT, TaiKhoan: taiKhoan } });
     if (!member || !this.normalizeRole(member.VaiTroDT).includes('nhom truong')) {
-      throw new BadRequestException('Chỉ nhóm trưởng của đề tài được gửi xét duyệt');
+      throw new ForbiddenException('Chỉ nhóm trưởng của đề tài được thực hiện thao tác này');
+    }
+  }
+
+  private async ensureProjectManager(maDT: string, taiKhoan: string) {
+    const member = await this.TVDTRes.findOne({ where: { MaDT: maDT, TaiKhoan: taiKhoan } });
+    if (member && this.normalizeRole(member.VaiTroDT).includes('nhom truong')) {
+      return;
+    }
+
+    const approval = await this.approvalRes.findOne({
+      where: { MaDT: maDT, TaiKhoanHoiDong: taiKhoan, TrangThai: 'Đã phê duyệt' },
+    });
+    if (!approval) {
+      throw new ForbiddenException('Bạn không có quyền cập nhật đề tài này');
     }
   }
 
@@ -125,7 +141,7 @@ export class ProjectService {
     return result;
   }
 
-  async changeProjectState(id: string, state: string) {
+  async changeProjectState(id: string, state: string, taiKhoan: string) {
     if (state === 'Đã phê duyệt') {
       throw new BadRequestException(
         'Không thể phê duyệt trực tiếp. Mỗi hội đồng phải xác nhận qua luồng xét duyệt.',
@@ -138,6 +154,7 @@ export class ProjectService {
     if (!changeProject) {
       throw new NotFoundException('Không tìm thấy đề tài này');
     }
+    await this.ensureProjectLeader(id, taiKhoan);
     changeProject.TrangThai = state;
     return this.DTRes.save(changeProject);
   }
@@ -149,7 +166,7 @@ export class ProjectService {
   ) {
     const project = await this.DTRes.findOne({ where: { MaDT: maDT } });
     if (!project) throw new NotFoundException('Không tìm thấy đề tài này');
-    await this.requireProjectLeader(maDT, sender);
+    await this.ensureProjectLeader(maDT, sender);
 
     const reviewerIds = [...new Set((dto.reviewerIds || []).map((id) => id.trim()).filter(Boolean))];
     if (reviewerIds.length === 0) {
@@ -242,7 +259,7 @@ export class ProjectService {
     };
   }
 
-  async deleteProject(id: string) {
+  async deleteProject(id: string, taiKhoan: string) {
     const project = await this.DTRes.findOne({
       where: { MaDT: id },
     });
@@ -250,6 +267,7 @@ export class ProjectService {
     if (!project) {
       throw new NotFoundException('Không tìm thấy đề tài này');
     }
+    await this.ensureProjectLeader(id, taiKhoan);
     return this.DTRes.delete(project);
   }
 
@@ -275,12 +293,13 @@ export class ProjectService {
     return leader;
   }
 
-  async updateProjectDate(id: string, dto: DateDto) {
+  async updateProjectDate(id: string, dto: DateDto, taiKhoan: string) {
     const project = await this.DTRes.findOne({ where: { MaDT: id } });
 
     if (!project) {
       throw new NotFoundException('Không tìm thấy đề tài này');
     }
+    await this.ensureProjectManager(id, taiKhoan);
 
     // Chỉ cập nhật field nào được truyền vào
     if (dto.NgayBatDau) project.NgayBatDau = new Date(dto.NgayBatDau);

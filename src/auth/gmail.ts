@@ -1,16 +1,21 @@
 import * as nodemailer from 'nodemailer';
 
-export async function sendMail(to: string, link: string) {
+export async function sendMail(
+  to: string,
+  link: string,
+  mailUser: string,
+  mailPassword: string,
+) {
   const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-      user: 'hungdztv165@gmail.com',
-      pass: 'aakn tkgw bczg uakx',
+      user: mailUser,
+      pass: mailPassword,
     },
   });
 
   await transporter.sendMail({
-    from: 'hungdztv165@gmail.com',
+    from: mailUser,
     to,
     subject: 'Khôi phục mật khẩu',
     html: `

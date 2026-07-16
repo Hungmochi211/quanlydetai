@@ -41,8 +41,8 @@ export class ProjectController {
   }
 
   @Patch('changestate/:id')
-  changeProjectState(@Param('id') id: string, @Body('state') state: string) {
-    return this.projectService.changeProjectState(id, state);
+  changeProjectState(@Param('id') id: string, @Body('state') state: string, @Req() req) {
+    return this.projectService.changeProjectState(id, state, req.user.TaiKhoan);
   }
 
   @Post(':id/submit-for-approval')
@@ -79,13 +79,13 @@ export class ProjectController {
   }
 
   @Delete('deleteproject/:id')
-  deleteProject(@Param('id') id: string) {
-    return this.projectService.deleteProject(id);
+  deleteProject(@Param('id') id: string, @Req() req) {
+    return this.projectService.deleteProject(id, req.user.TaiKhoan);
   }
 
   @Patch('updatedate/:id')
-  updateProjectDate(@Param('id') id: string, @Body() dto: DateDto) {
-    return this.projectService.updateProjectDate(id, dto);
+  updateProjectDate(@Param('id') id: string, @Body() dto: DateDto, @Req() req) {
+    return this.projectService.updateProjectDate(id, dto, req.user.TaiKhoan);
   }
 
   @Get('/:id')

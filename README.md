@@ -59,16 +59,8 @@ npm run start:prod
 ```bash
 npm test -- --runInBand
 ```
-
 Các unit test hiện có kiểm tra đăng nhập JWT, quyền nhóm trưởng, và quy tắc chỉ bắt đầu đề tài sau khi toàn bộ hội đồng phê duyệt.
 
-<<<<<<< HEAD
-```
-
-Frontend mặc định chạy ở `http://localhost:5173`; cấu hình API trong `VITE_API_URL`.
-
-=======
->>>>>>> e67d37cb2a5167edf8503f56695c0a79320d7b61
 ## Bảo mật cấu hình
 
 - Không commit file `.env`.

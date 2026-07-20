@@ -13,6 +13,7 @@ import { ThanhVienMocDT } from 'src/entity/pgmem.entity';
 import { DocumentsModule } from 'src/documents/documents.module';
 import { TaiLieu } from 'src/entity/document.entity';
 import { XetDuyetDeTai } from 'src/entity/project-approval.entity';
+import { AuthModule } from 'src/auth/auth.module';
 
 @Module({
   imports: [
@@ -26,7 +27,8 @@ import { XetDuyetDeTai } from 'src/entity/project-approval.entity';
       ThanhVienMocDT,
       TaiLieu
     ]),
-    DocumentsModule
+    DocumentsModule,
+    AuthModule,
   ],
   controllers: [ProgressController],
   providers: [ProgressService, NotificationsService, ProjectService],

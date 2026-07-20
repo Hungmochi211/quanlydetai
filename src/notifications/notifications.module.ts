@@ -5,9 +5,10 @@ import { ThongBao } from 'src/entity/notification.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { NguoiDung } from 'src/entity/user.entity';
 import { NotificationController } from './notifications.controller';
+import { AuthModule } from 'src/auth/auth.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([ThongBao, NguoiDung])],
+  imports: [TypeOrmModule.forFeature([ThongBao, NguoiDung]), AuthModule],
   providers: [NotificationsGateway, NotificationsService],
   controllers: [NotificationController],
   exports: [NotificationsGateway, NotificationsService],

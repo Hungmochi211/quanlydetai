@@ -5,9 +5,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { TaiLieu } from 'src/entity/document.entity';
 import { ThanhVienDT } from 'src/entity/pjmem.entity';
 import { MocDeTai } from 'src/entity/progress.entity';
+import { AuthModule } from 'src/auth/auth.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([TaiLieu, ThanhVienDT, MocDeTai])],
+  imports: [TypeOrmModule.forFeature([TaiLieu, ThanhVienDT, MocDeTai]), AuthModule],
   controllers: [DocumentsController],
   providers: [DocumentsService],
   exports: [DocumentsService]

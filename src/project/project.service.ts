@@ -411,7 +411,10 @@ export class ProjectService {
       throw new NotFoundException('Không tìm thấy đề tài này');
     }
 
-    project.TienDo = TD;
+    project.TienDo = Math.min(TD, 100);
+    if (project.TienDo === 100) {
+      project.TrangThai = 'Hoàn thành';
+    }
     return this.DTRes.save(project);
   }
 }

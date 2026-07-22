@@ -127,6 +127,12 @@ describe('ProjectService - xét duyệt nhiều hội đồng', () => {
     await expect(service.deleteProject('DT01', 'leader')).resolves.toMatchObject({ affected: 1 });
   });
 
+  it('chuyển đề tài sang Hoàn thành khi tiến độ đạt 100%', async () => {
+    const result = await service.updateTienDoProject('DT01', 100);
+
+    expect(result).toMatchObject({ TienDo: 100, TrangThai: 'Hoàn thành' });
+  });
+
   it('không cho gửi Hội đồng chấm điểm khi đề tài chưa được phê duyệt', async () => {
     await expect(service.submitForApproval('DT01', 'leader', { councilType: 'scoring' }))
       .rejects.toBeInstanceOf(BadRequestException);

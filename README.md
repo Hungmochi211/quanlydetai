@@ -1,6 +1,6 @@
 # Research Topic Management System – Backend
 
-Backend REST API cho hệ thống quản lý đề tài nghiên cứu khoa học. Ứng dụng quản lý người dùng, đề tài, thành viên, mốc tiến độ, tài liệu minh chứng, thông báo và quy trình xét duyệt nhiều hội đồng.
+Backend REST API cho hệ thống quản lý đề tài nghiên cứu khoa học. Ứng dụng quản lý người dùng, đề tài, thành viên, mốc tiến độ, tài liệu minh chứng, thông báo và quy trình xét duyệt nhiều hội đồng. Hệ thống tách `Hội đồng xét duyệt` và `Hội đồng chấm điểm`: chỉ gửi chấm điểm sau khi đề tài đã được phê duyệt, mỗi loại hội đồng chỉ được gửi một lần.
 
 ## Công nghệ
 

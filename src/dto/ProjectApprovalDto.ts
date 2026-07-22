@@ -1,10 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class SubmitProjectForApprovalDto {
-  @ApiProperty({ type: [String], example: ['hoidong01', 'hoidong02'] })
-  reviewerIds!: string[];
+  @ApiProperty({ enum: ['approval', 'scoring'], description: 'Loại hội đồng nhận đề tài' })
+  councilType!: 'approval' | 'scoring';
 
-  @ApiProperty({ required: false })
+  @ApiProperty({ required: false, description: 'Ghi chú gửi hội đồng' })
   note?: string;
 }
 

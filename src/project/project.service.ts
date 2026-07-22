@@ -6,13 +6,16 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DateDto } from 'src/dto/DateDto';
+import { UpdateProjectDto } from 'src/dto/UpdateProjectDto';
 import { RegisterTopicDto } from 'src/dto/RegisterTopicDto';
 import { ThanhVienDT } from 'src/entity/pjmem.entity';
 import { XetDuyetDeTai } from 'src/entity/project-approval.entity';
 import { DeTai } from 'src/entity/project.entity';
 import { NguoiDung } from 'src/entity/user.entity';
+import { TaiLieu } from 'src/entity/document.entity';
 import { In, Repository } from 'typeorm';
 import { ReviewProjectDto, SubmitProjectForApprovalDto } from 'src/dto/ProjectApprovalDto';
+import { NotificationsService } from 'src/notifications/notifications.service';
 
 @Injectable()
 export class ProjectService {
@@ -28,6 +31,11 @@ export class ProjectService {
 
     @InjectRepository(NguoiDung)
     private userRes: Repository<NguoiDung>,
+
+    @InjectRepository(TaiLieu)
+    private documentRes: Repository<TaiLieu>,
+
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   private normalizeRole(role?: string) {
@@ -60,6 +68,21 @@ export class ProjectService {
     }
   }
 
+  private async ensureProjectCanBeEdited(project: DeTai, taiKhoan: string) {
+    await this.ensureProjectLeader(project.MaDT, taiKhoan);
+
+    if (project.TrangThai !== 'Nháp') {
+      throw new BadRequestException('Chỉ được sửa hoặc xóa đề tài ở trạng thái Nháp');
+    }
+
+    const submittedForApproval = await this.approvalRes.count({
+      where: { MaDT: project.MaDT, LoaiHoiDong: 'Xét duyệt' },
+    });
+    if (submittedForApproval > 0) {
+      throw new BadRequestException('Đề tài đã gửi Hội đồng xét duyệt nên không thể sửa hoặc xóa');
+    }
+  }
+
   async registerProject(user: any, prDto: RegisterTopicDto) {
     //kiem tra de tai
     const detai = await this.DTRes.findOne({ where: { MaDT: prDto.MaDT } });
@@ -84,7 +107,7 @@ export class ProjectService {
       PhanLoai: prDto.PhanLoai,
       idNguoiHD: prDto.idNguoiHD,
       MoTa: prDto.MoTa,
-      TrangThai: 'Chờ phê duyệt',
+      TrangThai: 'Nháp',
       TienDo: 0,
       NgayTao: new Date(),
     });
@@ -168,38 +191,78 @@ export class ProjectService {
     if (!project) throw new NotFoundException('Không tìm thấy đề tài này');
     await this.ensureProjectLeader(maDT, sender);
 
-    const reviewerIds = [...new Set((dto.reviewerIds || []).map((id) => id.trim()).filter(Boolean))];
-    if (reviewerIds.length === 0) {
-      throw new BadRequestException('Phải chọn ít nhất một thành viên hội đồng');
+    if (dto.councilType !== 'approval' && dto.councilType !== 'scoring') {
+      throw new BadRequestException('Loại hội đồng không hợp lệ');
     }
 
-    const reviewers = await this.userRes.find({ where: { TaiKhoan: In(reviewerIds) } });
-    const committeeIds = reviewers
-      .filter((reviewer) => this.normalizeRole(reviewer.VaiTro).includes('hoi dong'))
-      .map((reviewer) => reviewer.TaiKhoan);
+    const isScoringCouncil = dto.councilType === 'scoring';
+    const councilType = isScoringCouncil ? 'Chấm điểm' : 'Xét duyệt';
+    const councilRole = isScoringCouncil ? 'Hội đồng chấm điểm' : 'Hội đồng xét duyệt';
 
-    if (committeeIds.length !== reviewerIds.length) {
-      throw new BadRequestException('Danh sách người nhận phải là thành viên hội đồng hợp lệ');
+    if (isScoringCouncil && project.TrangThai !== 'Đã phê duyệt') {
+      throw new BadRequestException('Chỉ được gửi Hội đồng chấm điểm sau khi đề tài đã được phê duyệt');
     }
 
-    // Gửi lại yêu cầu sẽ thay toàn bộ danh sách xét duyệt cũ bằng danh sách mới.
-    await this.approvalRes.delete({ MaDT: maDT });
+    const existingApprovals = await this.approvalRes.count({
+      where: { MaDT: maDT, LoaiHoiDong: councilType },
+    });
+    if (existingApprovals > 0) {
+      throw new BadRequestException(`Đề tài đã được gửi ${councilRole} và không thể gửi lại`);
+    }
+
+    const committeeUsers = (await this.userRes.find())
+      .filter((reviewer) => {
+        const role = this.normalizeRole(reviewer.VaiTro);
+        return isScoringCouncil
+          ? role.includes('hoi dong cham diem')
+          : role === 'hoi dong' || role.includes('hoi dong xet duyet');
+      });
+    if (committeeUsers.length === 0) {
+      throw new BadRequestException(`Chưa có tài khoản nào có vai trò ${councilRole}`);
+    }
+
     await this.approvalRes.save(
-      committeeIds.map((TaiKhoanHoiDong) =>
+      committeeUsers.map(({ TaiKhoan }) =>
         this.approvalRes.create({
           MaDT: maDT,
-          TaiKhoanHoiDong,
-          TrangThai: 'Chờ phê duyệt',
+          TaiKhoanHoiDong: TaiKhoan,
+          LoaiHoiDong: councilType,
+          TrangThai: isScoringCouncil ? 'Chờ chấm điểm' : 'Chờ phê duyệt',
           GhiChu: dto.note?.trim() || undefined,
         }),
       ),
     );
 
-    project.TrangThai = 'Chờ phê duyệt';
-    project.NgayXetDuyet = null;
-    await this.DTRes.save(project);
+    if (!isScoringCouncil) {
+      project.TrangThai = 'Chờ phê duyệt';
+      project.NgayXetDuyet = null;
+      await this.DTRes.save(project);
+    }
 
-    return this.getApprovalSummary(maDT);
+    await Promise.all(
+      committeeUsers.map(({ TaiKhoan }) =>
+        this.notificationsService.create(
+          { TaiKhoan: sender },
+          {
+            TkNguoiNhan: TaiKhoan,
+            TieuDe: isScoringCouncil ? 'Có đề tài chờ chấm điểm' : 'Có đề tài chờ xét duyệt',
+            NoiDung: `Đề tài "${project.TenDT}" đang chờ bạn ${isScoringCouncil ? 'chấm điểm' : 'xét duyệt'}.${dto.note ? ` Ghi chú: ${dto.note}` : ''}`,
+            NgayTao: new Date(),
+          },
+        ),
+      ),
+    );
+
+    const summary = await this.getApprovalSummary(maDT);
+    const reviewers = (await this.getApprovals(maDT))
+      .filter((approval) => approval.LoaiHoiDong === councilType)
+      .map((approval) => ({
+        account: approval.TaiKhoanHoiDong,
+        name: approval.NguoiDung.TenDayDu,
+        status: approval.TrangThai,
+        LoaiHoiDong: approval.LoaiHoiDong,
+      }));
+    return { ...summary, councilType, reviewers };
   }
 
   async reviewProject(maDT: string, reviewerAccount: string, dto: ReviewProjectDto) {
@@ -208,7 +271,7 @@ export class ProjectService {
     }
 
     const approval = await this.approvalRes.findOne({
-      where: { MaDT: maDT, TaiKhoanHoiDong: reviewerAccount },
+      where: { MaDT: maDT, TaiKhoanHoiDong: reviewerAccount, LoaiHoiDong: 'Xét duyệt' },
     });
     if (!approval) {
       throw new NotFoundException('Bạn không nằm trong danh sách hội đồng xét duyệt đề tài này');
@@ -225,7 +288,7 @@ export class ProjectService {
     const project = await this.DTRes.findOne({ where: { MaDT: maDT } });
     if (!project) throw new NotFoundException('Không tìm thấy đề tài này');
 
-    const approvals = await this.approvalRes.find({ where: { MaDT: maDT } });
+    const approvals = await this.approvalRes.find({ where: { MaDT: maDT, LoaiHoiDong: 'Xét duyệt' } });
     if (approvals.some((item) => item.TrangThai === 'Từ chối')) {
       project.TrangThai = 'Từ chối';
     } else if (approvals.length > 0 && approvals.every((item) => item.TrangThai === 'Đã phê duyệt')) {
@@ -240,14 +303,29 @@ export class ProjectService {
   }
 
   async getApprovals(maDT: string) {
-    return this.approvalRes.find({
+    const approvals = await this.approvalRes.find({
       where: { MaDT: maDT },
       order: { NgayTao: 'ASC', Id: 'ASC' },
     });
+
+    const accounts = approvals.map((approval) => approval.TaiKhoanHoiDong);
+    const users = accounts.length > 0
+      ? await this.userRes.find({ where: { TaiKhoan: In(accounts) } })
+      : [];
+    const namesByAccount = new Map(users.map((user) => [user.TaiKhoan, user.TenDayDu]));
+
+    return approvals.map((approval) => ({
+      ...approval,
+      NguoiDung: {
+        TaiKhoan: approval.TaiKhoanHoiDong,
+        TenDayDu: namesByAccount.get(approval.TaiKhoanHoiDong) || approval.TaiKhoanHoiDong,
+      },
+    }));
   }
 
   private async getApprovalSummary(maDT: string) {
-    const approvals = await this.getApprovals(maDT);
+    const approvals = (await this.getApprovals(maDT))
+      .filter((approval) => approval.LoaiHoiDong === 'Xét duyệt');
     const project = await this.DTRes.findOne({ where: { MaDT: maDT } });
     const approvedReviewers = approvals.filter((item) => item.TrangThai === 'Đã phê duyệt').length;
     return {
@@ -256,6 +334,11 @@ export class ProjectService {
       approvedReviewers,
       pendingReviewers: approvals.filter((item) => item.TrangThai === 'Chờ phê duyệt').length,
       allApproved: approvals.length > 0 && approvedReviewers === approvals.length,
+      reviewers: approvals.map((item) => ({
+        account: item.TaiKhoanHoiDong,
+        name: item.NguoiDung.TenDayDu,
+        status: item.TrangThai,
+      })),
     };
   }
 
@@ -267,8 +350,30 @@ export class ProjectService {
     if (!project) {
       throw new NotFoundException('Không tìm thấy đề tài này');
     }
-    await this.ensureProjectLeader(id, taiKhoan);
-    return this.DTRes.delete(project);
+    await this.ensureProjectCanBeEdited(project, taiKhoan);
+
+    // ThanhVienDT không cấu hình cascade ở khóa ngoại, nên phải xóa trước DeTai.
+    // Tài liệu cũng được xóa để tránh lỗi khóa ngoại trên các cơ sở dữ liệu cũ.
+    await this.documentRes.delete({ MaDT: id });
+    await this.TVDTRes.delete({ MaDT: id });
+    return this.DTRes.delete({ MaDT: id });
+  }
+
+  async updateProject(id: string, dto: UpdateProjectDto, taiKhoan: string) {
+    const project = await this.DTRes.findOne({ where: { MaDT: id } });
+    if (!project) {
+      throw new NotFoundException('Không tìm thấy đề tài này');
+    }
+    await this.ensureProjectCanBeEdited(project, taiKhoan);
+
+    if (dto.TenDT !== undefined) project.TenDT = dto.TenDT.trim();
+    if (dto.ChuyenNganh !== undefined) project.ChuyenNganh = dto.ChuyenNganh;
+    if (dto.Khoa !== undefined) project.Khoa = dto.Khoa;
+    if (dto.PhanLoai !== undefined) project.PhanLoai = dto.PhanLoai;
+    if (dto.idNguoiHD !== undefined) project.idNguoiHD = dto.idNguoiHD;
+    if (dto.MoTa !== undefined) project.MoTa = dto.MoTa;
+
+    return this.DTRes.save(project);
   }
 
   async getMemberById(id: string) {

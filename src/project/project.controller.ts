@@ -14,6 +14,7 @@ import { ProjectService } from './project.service';
 import { AuthGuard } from 'src/auth/auth.guard';
 import { RegisterTopicDto } from 'src/dto/RegisterTopicDto';
 import { DateDto } from 'src/dto/DateDto';
+import { UpdateProjectDto } from 'src/dto/UpdateProjectDto';
 import { ReviewProjectDto, SubmitProjectForApprovalDto } from 'src/dto/ProjectApprovalDto';
 
 @Controller('project')
@@ -81,6 +82,11 @@ export class ProjectController {
   @Delete('deleteproject/:id')
   deleteProject(@Param('id') id: string, @Req() req) {
     return this.projectService.deleteProject(id, req.user.TaiKhoan);
+  }
+
+  @Patch('updateproject/:id')
+  updateProject(@Param('id') id: string, @Body() dto: UpdateProjectDto, @Req() req) {
+    return this.projectService.updateProject(id, dto, req.user.TaiKhoan);
   }
 
   @Patch('updatedate/:id')

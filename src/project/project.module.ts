@@ -6,10 +6,16 @@ import { ThanhVienDT } from 'src/entity/pjmem.entity';
 import { DeTai } from 'src/entity/project.entity';
 import { XetDuyetDeTai } from 'src/entity/project-approval.entity';
 import { NguoiDung } from 'src/entity/user.entity';
+import { TaiLieu } from 'src/entity/document.entity';
 import { AuthModule } from 'src/auth/auth.module';
+import { NotificationsModule } from 'src/notifications/notifications.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([ThanhVienDT, DeTai, XetDuyetDeTai, NguoiDung]), AuthModule],
+  imports: [
+    TypeOrmModule.forFeature([ThanhVienDT, DeTai, XetDuyetDeTai, NguoiDung, TaiLieu]),
+    AuthModule,
+    NotificationsModule,
+  ],
   controllers: [ProjectController],
   providers: [ProjectService],
 })

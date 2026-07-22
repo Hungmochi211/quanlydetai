@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ProjectService } from './project.service';
 
 describe('ProjectService - xét duyệt nhiều hội đồng', () => {
@@ -14,6 +14,7 @@ describe('ProjectService - xét duyệt nhiều hội đồng', () => {
     const projectRepository = {
       findOne: jest.fn(async ({ where }) => (where.MaDT === project.MaDT ? project : null)),
       save: jest.fn(async (entity) => entity),
+      delete: jest.fn(async () => ({ affected: 1 })),
     };
 
     const memberRepository = {
@@ -22,6 +23,7 @@ describe('ProjectService - xét duyệt nhiều hội đồng', () => {
           ? { MaDT: 'DT01', TaiKhoan: 'leader', VaiTroDT: 'Nhóm trưởng' }
           : null,
       ),
+      delete: jest.fn(async () => ({ affected: 1 })),
     };
 
     const approvalRepository = {
@@ -29,6 +31,7 @@ describe('ProjectService - xét duyệt nhiều hội đồng', () => {
       delete: jest.fn(async ({ MaDT }) => {
         approvals = approvals.filter((approval) => approval.MaDT !== MaDT);
       }),
+      count: jest.fn(async ({ where }) => approvals.filter((approval) => approval.MaDT === where.MaDT).length),
       save: jest.fn(async (entityOrEntities) => {
         const entities = Array.isArray(entityOrEntities) ? entityOrEntities : [entityOrEntities];
         for (const entity of entities) {
@@ -49,8 +52,9 @@ describe('ProjectService - xét duyệt nhiều hội đồng', () => {
 
     const userRepository = {
       find: jest.fn(async () => [
-        { TaiKhoan: 'committee-1', VaiTro: 'Hội đồng' },
-        { TaiKhoan: 'committee-2', VaiTro: 'Hội đồng' },
+        { TaiKhoan: 'committee-1', VaiTro: 'Hội đồng xét duyệt' },
+        { TaiKhoan: 'committee-2', VaiTro: 'Hội đồng xét duyệt' },
+        { TaiKhoan: 'scorer-1', VaiTro: 'Hội đồng chấm điểm' },
       ]),
     };
 
@@ -59,6 +63,8 @@ describe('ProjectService - xét duyệt nhiều hội đồng', () => {
       memberRepository as any,
       approvalRepository as any,
       userRepository as any,
+      { delete: jest.fn(async () => ({ affected: 0 })) } as any,
+      { create: jest.fn() } as any,
     );
   });
 
@@ -69,9 +75,7 @@ describe('ProjectService - xét duyệt nhiều hội đồng', () => {
   });
 
   it('chỉ bắt đầu đề tài sau khi toàn bộ hội đồng đã phê duyệt', async () => {
-    await service.submitForApproval('DT01', 'leader', {
-      reviewerIds: ['committee-1', 'committee-2'],
-    });
+    await service.submitForApproval('DT01', 'leader', { councilType: 'approval' });
 
     const firstReview = await service.reviewProject('DT01', 'committee-1', {
       decision: 'approved',
@@ -95,9 +99,7 @@ describe('ProjectService - xét duyệt nhiều hội đồng', () => {
   });
 
   it('chuyển đề tài sang từ chối nếu một hội đồng từ chối', async () => {
-    await service.submitForApproval('DT01', 'leader', {
-      reviewerIds: ['committee-1', 'committee-2'],
-    });
+    await service.submitForApproval('DT01', 'leader', { councilType: 'approval' });
 
     const result = await service.reviewProject('DT01', 'committee-1', {
       decision: 'rejected',
@@ -109,5 +111,36 @@ describe('ProjectService - xét duyệt nhiều hội đồng', () => {
       approvedReviewers: 0,
       allApproved: false,
     });
+  });
+
+  it('không cho phép nhóm trưởng gửi lại cùng một đề tài', async () => {
+    await service.submitForApproval('DT01', 'leader', { councilType: 'approval' });
+
+    await expect(service.submitForApproval('DT01', 'leader', { councilType: 'approval' })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('xóa được đề tài Nháp sau khi xóa các thành viên và tài liệu liên quan', async () => {
+    project.TrangThai = 'Nháp';
+
+    await expect(service.deleteProject('DT01', 'leader')).resolves.toMatchObject({ affected: 1 });
+  });
+
+  it('không cho gửi Hội đồng chấm điểm khi đề tài chưa được phê duyệt', async () => {
+    await expect(service.submitForApproval('DT01', 'leader', { councilType: 'scoring' }))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('cho gửi Hội đồng chấm điểm một lần sau khi đề tài đã được phê duyệt', async () => {
+    project.TrangThai = 'Đã phê duyệt';
+
+    const result = await service.submitForApproval('DT01', 'leader', { councilType: 'scoring' });
+    expect(result.reviewers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ account: 'scorer-1', LoaiHoiDong: 'Chấm điểm' }),
+    ]));
+
+    await expect(service.submitForApproval('DT01', 'leader', { councilType: 'scoring' }))
+      .rejects.toBeInstanceOf(BadRequestException);
   });
 });

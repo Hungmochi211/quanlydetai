@@ -11,6 +11,7 @@ import { AddTaiLieuDto } from 'src/dto/addTaiLieuDto';
 import { TaiLieu } from 'src/entity/document.entity';
 import { ThanhVienDT } from 'src/entity/pjmem.entity';
 import { MocDeTai } from 'src/entity/progress.entity';
+import { XetDuyetDeTai } from 'src/entity/project-approval.entity';
 import { Repository } from 'typeorm';
 
 @Injectable()
@@ -22,6 +23,9 @@ export class DocumentsService {
     private readonly thanhVienRepository: Repository<ThanhVienDT>,
     @InjectRepository(MocDeTai)
     private readonly mocRepository: Repository<MocDeTai>,
+
+    @InjectRepository(XetDuyetDeTai)
+    private readonly approvalRepository: Repository<XetDuyetDeTai>,
   ) { }
 
   async upload(
@@ -72,7 +76,7 @@ export class DocumentsService {
 
   async findOne(id: number, taiKhoan: string): Promise<TaiLieu> {
     const taiLieu = await this.findOneById(id);
-    await this.getMemberOrThrow(taiLieu.MaDT, taiKhoan);
+    await this.ensureCanViewProject(taiLieu.MaDT, taiKhoan);
     return taiLieu;
   }
 
@@ -91,7 +95,7 @@ export class DocumentsService {
   }
 
   async findByDeTai(maDT: string, taiKhoan: string): Promise<TaiLieu[]> {
-    await this.getMemberOrThrow(maDT, taiKhoan);
+    await this.ensureCanViewProject(maDT, taiKhoan);
     return this.taiLieuRepository.find({
       where: { MaDT: maDT },
       order: { NgayTaiLen: 'DESC' },
@@ -104,7 +108,7 @@ export class DocumentsService {
       throw new NotFoundException(`Không tìm thấy mốc với id = ${maMoc}`);
     }
 
-    await this.getMemberOrThrow(moc.MaDT, taiKhoan);
+    await this.ensureCanViewProject(moc.MaDT, taiKhoan);
     return this.taiLieuRepository.find({
       where: { MaMoc: maMoc },
       order: { NgayTaiLen: 'DESC' },
@@ -143,6 +147,20 @@ export class DocumentsService {
       throw new ForbiddenException('Bạn không thuộc đề tài này');
     }
     return thanhVien;
+  }
+
+  private async ensureCanViewProject(maDT: string, taiKhoan: string): Promise<void> {
+    const thanhVien = await this.thanhVienRepository.findOne({
+      where: { MaDT: maDT, TaiKhoan: taiKhoan },
+    });
+    if (thanhVien) return;
+
+    const approval = await this.approvalRepository.findOne({
+      where: { MaDT: maDT, TaiKhoanHoiDong: taiKhoan },
+    });
+    if (!approval) {
+      throw new ForbiddenException('Bạn không có quyền xem tài liệu của đề tài này');
+    }
   }
 
   private async validateMilestone(

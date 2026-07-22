@@ -69,6 +69,23 @@ export class DocumentsController {
         return res.download(path, tenFile);
     }
 
+    @Get(':id/preview')
+    async preview(
+        @Param('id', ParseIntPipe) id: number,
+        @Request() req: AuthenticatedRequest,
+        @Res() res: Response,
+    ) {
+        const { path, tenFile } = await this.documentsService.getPhysicalPath(
+            id,
+            this.getTaiKhoan(req),
+        );
+        res.setHeader(
+            'Content-Disposition',
+            `inline; filename*=UTF-8''${encodeURIComponent(tenFile)}`,
+        );
+        return res.sendFile(path);
+    }
+
     @Get(':id')
     findOne(
         @Param('id', ParseIntPipe) id: number,

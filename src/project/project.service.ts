@@ -55,17 +55,7 @@ export class ProjectService {
   }
 
   private async ensureProjectManager(maDT: string, taiKhoan: string) {
-    const member = await this.TVDTRes.findOne({ where: { MaDT: maDT, TaiKhoan: taiKhoan } });
-    if (member && this.normalizeRole(member.VaiTroDT).includes('nhom truong')) {
-      return;
-    }
-
-    const approval = await this.approvalRes.findOne({
-      where: { MaDT: maDT, TaiKhoanHoiDong: taiKhoan, TrangThai: 'Đã phê duyệt' },
-    });
-    if (!approval) {
-      throw new ForbiddenException('Bạn không có quyền cập nhật đề tài này');
-    }
+    await this.ensureProjectLeader(maDT, taiKhoan);
   }
 
   private async ensureProjectCanBeEdited(project: DeTai, taiKhoan: string) {

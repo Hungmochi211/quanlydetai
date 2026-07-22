@@ -22,6 +22,8 @@ import { TaiLieu } from './entity/document.entity';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThanhVienMocDT } from './entity/pgmem.entity';
 import { XetDuyetDeTai } from './entity/project-approval.entity';
+import { NhanXetDeTai } from './entity/project-comment.entity';
+import { CommentsModule } from './comments/comments.module';
 
 @Module({
   imports: [
@@ -37,6 +39,7 @@ import { XetDuyetDeTai } from './entity/project-approval.entity';
     NotificationsModule,
     ProgressModule,
     DocumentsModule,
+    CommentsModule,
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -58,6 +61,7 @@ import { XetDuyetDeTai } from './entity/project-approval.entity';
           TaiLieu,
           ThanhVienMocDT,
           XetDuyetDeTai,
+          NhanXetDeTai,
         ],
         synchronize: config.get<string>('DB_SYNCHRONIZE') === 'true',
         options: {

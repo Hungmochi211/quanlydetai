@@ -12,6 +12,10 @@ export class XetDuyetDeTai {
   @Column({ type: 'varchar', length: 50 })
   TaiKhoanHoiDong!: string;
 
+  // Null đối với dữ liệu cũ được gửi theo role. Dữ liệu mới lấy từ HoiDongDeTai.
+  @Column({ type: 'int', nullable: true })
+  MaHoiDong?: number;
+
   // Xét duyệt | Chấm điểm
   @Column({ type: 'nvarchar', length: 30, default: 'Xét duyệt' })
   LoaiHoiDong!: string;

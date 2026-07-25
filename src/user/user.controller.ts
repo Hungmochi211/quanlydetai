@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { UserService } from './user.service';
 import { ApiTags } from '@nestjs/swagger';
 
@@ -6,12 +6,6 @@ import { ApiTags } from '@nestjs/swagger';
 @ApiTags('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
-
-  @Post('login')
-  async Login(@Body() Body: { TaiKhoan: string; MatKhau: string }) {
-    console.log('Body nhận từ FE:', Body);
-    return await this.userService.Login(Body.TaiKhoan, Body.MatKhau);
-  }
 
   @Get('sreach')
   async checkTaiKhoan(@Query('userkey') userkey: string) {

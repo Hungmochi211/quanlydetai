@@ -13,6 +13,7 @@ import { XetDuyetDeTai } from 'src/entity/project-approval.entity';
 import { DeTai } from 'src/entity/project.entity';
 import { NguoiDung } from 'src/entity/user.entity';
 import { TaiLieu } from 'src/entity/document.entity';
+import { HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
 import { In, Repository } from 'typeorm';
 import { ReviewProjectDto, SubmitProjectForApprovalDto } from 'src/dto/ProjectApprovalDto';
 import { NotificationsService } from 'src/notifications/notifications.service';
@@ -34,6 +35,12 @@ export class ProjectService {
 
     @InjectRepository(TaiLieu)
     private documentRes: Repository<TaiLieu>,
+
+    @InjectRepository(HoiDongDeTai)
+    private councilAssignmentRes: Repository<HoiDongDeTai>,
+
+    @InjectRepository(ThanhVienHoiDong)
+    private councilMemberRes: Repository<ThanhVienHoiDong>,
 
     private readonly notificationsService: NotificationsService,
   ) {}
@@ -188,6 +195,7 @@ export class ProjectService {
     const isScoringCouncil = dto.councilType === 'scoring';
     const councilType = isScoringCouncil ? 'Chấm điểm' : 'Xét duyệt';
     const councilRole = isScoringCouncil ? 'Hội đồng chấm điểm' : 'Hội đồng xét duyệt';
+    const requiredCouncilBusiness = isScoringCouncil ? 'scoring' : 'approval';
 
     if (isScoringCouncil && project.TrangThai !== 'Đã phê duyệt') {
       throw new BadRequestException('Chỉ được gửi Hội đồng chấm điểm sau khi đề tài đã được phê duyệt');
@@ -200,15 +208,37 @@ export class ProjectService {
       throw new BadRequestException(`Đề tài đã được gửi ${councilRole} và không thể gửi lại`);
     }
 
-    const committeeUsers = (await this.userRes.find())
-      .filter((reviewer) => {
+    let committeeUsers: NguoiDung[];
+    let councilId: number | undefined;
+    if (dto.councilId !== undefined) {
+      const assignment = await this.councilAssignmentRes.findOne({
+        where: { MaDT: maDT, MaHoiDong: dto.councilId },
+        relations: ['LoaiHoiDong'],
+      });
+      if (!assignment || assignment.LoaiHoiDong?.NghiepVu !== requiredCouncilBusiness) {
+        throw new BadRequestException('Hội đồng chưa được Admin gán đúng nghiệp vụ cho đề tài này');
+      }
+      const members = await this.councilMemberRes.find({
+        where: { MaHoiDong: dto.councilId },
+        relations: ['NguoiDung'],
+      });
+      committeeUsers = members.map((member) => member.NguoiDung).filter(Boolean);
+      councilId = dto.councilId;
+    } else {
+      // Tương thích FE cũ. FE mới cần truyền councilId để dùng hội đồng động.
+      committeeUsers = (await this.userRes.find()).filter((reviewer) => {
         const role = this.normalizeRole(reviewer.VaiTro);
         return isScoringCouncil
           ? role.includes('hoi dong cham diem')
           : role === 'hoi dong' || role.includes('hoi dong xet duyet');
       });
+    }
     if (committeeUsers.length === 0) {
-      throw new BadRequestException(`Chưa có tài khoản nào có vai trò ${councilRole}`);
+      throw new BadRequestException(
+        councilId
+          ? 'Hội đồng được gán chưa có thành viên hợp lệ'
+          : `Chưa có tài khoản nào có vai trò ${councilRole}`,
+      );
     }
 
     await this.approvalRes.save(
@@ -216,6 +246,7 @@ export class ProjectService {
         this.approvalRes.create({
           MaDT: maDT,
           TaiKhoanHoiDong: TaiKhoan,
+          MaHoiDong: councilId,
           LoaiHoiDong: councilType,
           TrangThai: isScoringCouncil ? 'Chờ chấm điểm' : 'Chờ phê duyệt',
           GhiChu: dto.note?.trim() || undefined,

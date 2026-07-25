@@ -24,6 +24,9 @@ import { ThanhVienMocDT } from './entity/pgmem.entity';
 import { XetDuyetDeTai } from './entity/project-approval.entity';
 import { NhanXetDeTai } from './entity/project-comment.entity';
 import { CommentsModule } from './comments/comments.module';
+import { AdminUsersModule } from './admin-users/admin-users.module';
+import { CouncilsModule } from './councils/councils.module';
+import { HoiDong, HoiDongDeTai, LoaiHoiDong, ThanhVienHoiDong } from './entity/council.entity';
 
 @Module({
   imports: [
@@ -40,6 +43,8 @@ import { CommentsModule } from './comments/comments.module';
     ProgressModule,
     DocumentsModule,
     CommentsModule,
+    AdminUsersModule,
+    CouncilsModule,
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -62,6 +67,10 @@ import { CommentsModule } from './comments/comments.module';
           ThanhVienMocDT,
           XetDuyetDeTai,
           NhanXetDeTai,
+          HoiDong,
+          ThanhVienHoiDong,
+          HoiDongDeTai,
+          LoaiHoiDong,
         ],
         synchronize: config.get<string>('DB_SYNCHRONIZE') === 'true',
         options: {

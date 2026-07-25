@@ -10,6 +10,7 @@ import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { RegisterDto } from 'src/dto/RegisterDto';
+import { UpdateProfileDto } from 'src/dto/UpdateProfileDto';
 import { UserService } from 'src/user/user.service';
 import bcrypt from 'bcrypt';
 import { sendMail } from './gmail';
@@ -28,7 +29,7 @@ export class AuthService {
   async signIn(
     TaiKhoan: string,
     MatKhau: string,
-  ): Promise<{ access_token: string }> {
+  ): Promise<{ access_token: string; requiresProfileCompletion: boolean }> {
     const user = await this.userService.findOne(TaiKhoan);
     if (!user) throw new UnauthorizedException('Sai tài khoản');
     const checkPass = await bcrypt.compare(MatKhau, user.MatKhau);
@@ -41,8 +42,12 @@ export class AuthService {
       VaiTro: user.VaiTro,
       SDT: user.SDT,
       Gmail: user.Gmail,
+      DaHoanThienHoSo: user.DaHoanThienHoSo,
     };
-    return { access_token: await this.jwtService.signAsync(payload) };
+    return {
+      access_token: await this.jwtService.signAsync(payload),
+      requiresProfileCompletion: !user.DaHoanThienHoSo,
+    };
   }
 
   async register(RegisterDto: RegisterDto) {
@@ -54,6 +59,9 @@ export class AuthService {
       Gmail: RegisterDto.Gmail,
       TaiKhoan: RegisterDto.TaiKhoan,
       MatKhau: passHash,
+      TenDayDu: RegisterDto.TenDayDu,
+      VaiTro: 'Sinh viên',
+      DaHoanThienHoSo: true,
     });
     const user = await this.userRes.save(newUser);
     delete (user as any).MatKhau;
@@ -109,8 +117,28 @@ export class AuthService {
     return { message: 'Đổi mật khẩu thành công' };
   }
 
-  async updateProfile(TaiKhoan: string, data: any) {
-    await this.userRes.update({ TaiKhoan: TaiKhoan }, data);
+  async updateProfile(TaiKhoan: string, data: UpdateProfileDto) {
+    const currentUser = await this.userRes.findOne({ where: { TaiKhoan } });
+    if (!currentUser) throw new NotFoundException('Không tìm thấy tài khoản');
+
+    const nextFullName = data.TenDayDu ?? currentUser.TenDayDu;
+    const nextEmail = data.Gmail ?? currentUser.Gmail;
+    if (!currentUser.DaHoanThienHoSo && (!nextFullName?.trim() || !nextEmail?.trim())) {
+      throw new BadRequestException('Vui lòng nhập họ tên và email để hoàn thiện hồ sơ');
+    }
+
+    const allowedData = Object.fromEntries(
+      Object.entries({
+        TenDayDu: data.TenDayDu,
+        Gmail: data.Gmail,
+        SDT: data.SDT,
+      }).filter(([, value]) => value !== undefined),
+    );
+
+    await this.userRes.update(
+      { TaiKhoan },
+      { ...allowedData, DaHoanThienHoSo: true },
+    );
 
     return { message: 'Cập nhật thành công' };
   }
@@ -118,7 +146,7 @@ export class AuthService {
   async getProfile(TaiKhoan: string) {
     const user = await this.userRes.findOne({
       where: { TaiKhoan: TaiKhoan },
-      select: ['TaiKhoan', 'TenDayDu', 'SDT', 'Gmail'],
+      select: ['TaiKhoan', 'TenDayDu', 'SDT', 'Gmail', 'VaiTro', 'DaHoanThienHoSo'],
     });
 
     return user;

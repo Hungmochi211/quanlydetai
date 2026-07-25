@@ -12,6 +12,7 @@ import { AuthGuard } from './auth.guard';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { LoginDto } from 'src/dto/LoginDto';
 import { RegisterDto } from 'src/dto/RegisterDto';
+import { UpdateProfileDto } from 'src/dto/UpdateProfileDto';
 
 @Controller('auth')
 @ApiTags('auth')
@@ -51,7 +52,7 @@ export class AuthCotroller {
   @Put('profile')
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
-  updateProfile(@Request() req, @Body() body) {
+  updateProfile(@Request() req, @Body() body: UpdateProfileDto) {
     return this.authService.updateProfile(req.user.TaiKhoan, body);
   }
 }

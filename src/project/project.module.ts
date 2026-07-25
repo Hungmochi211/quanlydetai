@@ -9,14 +9,24 @@ import { NguoiDung } from 'src/entity/user.entity';
 import { TaiLieu } from 'src/entity/document.entity';
 import { AuthModule } from 'src/auth/auth.module';
 import { NotificationsModule } from 'src/notifications/notifications.module';
+import { HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ThanhVienDT, DeTai, XetDuyetDeTai, NguoiDung, TaiLieu]),
+    TypeOrmModule.forFeature([
+      ThanhVienDT,
+      DeTai,
+      XetDuyetDeTai,
+      NguoiDung,
+      TaiLieu,
+      HoiDongDeTai,
+      ThanhVienHoiDong,
+    ]),
     AuthModule,
     NotificationsModule,
   ],
   controllers: [ProjectController],
   providers: [ProjectService],
+  exports: [ProjectService],
 })
 export class ProjectModule { }

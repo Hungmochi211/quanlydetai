@@ -14,11 +14,14 @@ export class NguoiDung {
   @Column({ type: 'nvarchar', length: 50, nullable: true })
   TenDayDu!: string;
 
-  @Column({ type: 'nvarchar', length: 100, nullable: false })
+  @Column({ type: 'nvarchar', length: 100, nullable: true })
   Gmail!: string;
 
   @Column({ type: 'nvarchar', length: 50, nullable: true })
   VaiTro!: string;
+
+  @Column({ type: 'bit', default: false })
+  DaHoanThienHoSo!: boolean;
 
   @Column({ type: 'int', nullable: true })
   SDT!: number;

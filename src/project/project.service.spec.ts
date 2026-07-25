@@ -64,6 +64,8 @@ describe('ProjectService - xét duyệt nhiều hội đồng', () => {
       approvalRepository as any,
       userRepository as any,
       { delete: jest.fn(async () => ({ affected: 0 })) } as any,
+      { findOne: jest.fn() } as any,
+      { find: jest.fn() } as any,
       { create: jest.fn() } as any,
     );
   });

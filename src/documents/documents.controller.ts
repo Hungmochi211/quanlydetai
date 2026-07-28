@@ -56,6 +56,14 @@ export class DocumentsController {
         return this.documentsService.findByMoc(maMoc, this.getTaiKhoan(req));
     }
 
+    @Get('report/:reportId')
+    findByProgressReport(
+        @Param('reportId', ParseIntPipe) reportId: number,
+        @Request() req: AuthenticatedRequest,
+    ) {
+        return this.documentsService.findByProgressReport(reportId, this.getTaiKhoan(req));
+    }
+
     @Get(':id/download')
     async download(
         @Param('id', ParseIntPipe) id: number,

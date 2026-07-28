@@ -27,6 +27,9 @@ import { CommentsModule } from './comments/comments.module';
 import { AdminUsersModule } from './admin-users/admin-users.module';
 import { CouncilsModule } from './councils/councils.module';
 import { HoiDong, HoiDongDeTai, LoaiHoiDong, ThanhVienHoiDong } from './entity/council.entity';
+import { BaoCaoTienDo } from './entity/progress-report.entity';
+import { PhanHoiBaoCaoTienDo } from './entity/progress-report-review.entity';
+import { ProgressReportsModule } from './progress-reports/progress-reports.module';
 
 @Module({
   imports: [
@@ -45,6 +48,7 @@ import { HoiDong, HoiDongDeTai, LoaiHoiDong, ThanhVienHoiDong } from './entity/c
     CommentsModule,
     AdminUsersModule,
     CouncilsModule,
+    ProgressReportsModule,
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -71,6 +75,8 @@ import { HoiDong, HoiDongDeTai, LoaiHoiDong, ThanhVienHoiDong } from './entity/c
           ThanhVienHoiDong,
           HoiDongDeTai,
           LoaiHoiDong,
+          BaoCaoTienDo,
+          PhanHoiBaoCaoTienDo,
         ],
         synchronize: config.get<string>('DB_SYNCHRONIZE') === 'true',
         options: {

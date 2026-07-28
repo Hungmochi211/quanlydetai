@@ -64,8 +64,36 @@ describe('ProjectService - xét duyệt nhiều hội đồng', () => {
       approvalRepository as any,
       userRepository as any,
       { delete: jest.fn(async () => ({ affected: 0 })) } as any,
-      { findOne: jest.fn() } as any,
-      { find: jest.fn() } as any,
+      {
+        findOne: jest.fn(),
+        find: jest.fn(async () => []),
+        create: jest.fn((data) => data),
+        save: jest.fn(async (data) => data),
+      } as any,
+      {
+        find: jest.fn(async () => [{
+          MaHoiDong: 8,
+          MaLoaiHoiDong: 2,
+          LaHoiDongMacDinh: true,
+          LoaiHoiDong: { NghiepVu: 'approval' },
+          ThanhVienHoiDong: [{ TaiKhoan: 'committee-1' }, { TaiKhoan: 'committee-2' }],
+        }, {
+          MaHoiDong: 9,
+          MaLoaiHoiDong: 3,
+          LaHoiDongMacDinh: true,
+          LoaiHoiDong: { NghiepVu: 'monitoring' },
+          ThanhVienHoiDong: [{ TaiKhoan: 'monitor-1' }],
+        }, {
+          MaHoiDong: 10,
+          MaLoaiHoiDong: 4,
+          LaHoiDongMacDinh: true,
+          LoaiHoiDong: { NghiepVu: 'scoring' },
+          ThanhVienHoiDong: [{ TaiKhoan: 'scorer-1' }],
+        }]),
+      } as any,
+      { find: jest.fn(async ({ where }) => where.MaHoiDong === 10
+        ? [{ NguoiDung: { TaiKhoan: 'scorer-1' } }]
+        : [{ NguoiDung: { TaiKhoan: 'committee-1' } }, { NguoiDung: { TaiKhoan: 'committee-2' } }]) } as any,
       { create: jest.fn() } as any,
     );
   });
@@ -129,10 +157,10 @@ describe('ProjectService - xét duyệt nhiều hội đồng', () => {
     await expect(service.deleteProject('DT01', 'leader')).resolves.toMatchObject({ affected: 1 });
   });
 
-  it('chuyển đề tài sang Hoàn thành khi tiến độ đạt 100%', async () => {
+  it('chuyển đề tài sang Chờ nghiệm thu khi tiến độ đạt 100%', async () => {
     const result = await service.updateTienDoProject('DT01', 100);
 
-    expect(result).toMatchObject({ TienDo: 100, TrangThai: 'Hoàn thành' });
+    expect(result).toMatchObject({ TienDo: 100, TrangThai: 'Chờ nghiệm thu' });
   });
 
   it('không cho gửi Hội đồng chấm điểm khi đề tài chưa được phê duyệt', async () => {

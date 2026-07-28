@@ -13,7 +13,7 @@ import { XetDuyetDeTai } from 'src/entity/project-approval.entity';
 import { DeTai } from 'src/entity/project.entity';
 import { NguoiDung } from 'src/entity/user.entity';
 import { TaiLieu } from 'src/entity/document.entity';
-import { HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
+import { HoiDong, HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
 import { In, Repository } from 'typeorm';
 import { ReviewProjectDto, SubmitProjectForApprovalDto } from 'src/dto/ProjectApprovalDto';
 import { NotificationsService } from 'src/notifications/notifications.service';
@@ -38,6 +38,9 @@ export class ProjectService {
 
     @InjectRepository(HoiDongDeTai)
     private councilAssignmentRes: Repository<HoiDongDeTai>,
+
+    @InjectRepository(HoiDong)
+    private councilRes: Repository<HoiDong>,
 
     @InjectRepository(ThanhVienHoiDong)
     private councilMemberRes: Repository<ThanhVienHoiDong>,
@@ -225,19 +228,22 @@ export class ProjectService {
       committeeUsers = members.map((member) => member.NguoiDung).filter(Boolean);
       councilId = dto.councilId;
     } else {
-      // Tương thích FE cũ. FE mới cần truyền councilId để dùng hội đồng động.
-      committeeUsers = (await this.userRes.find()).filter((reviewer) => {
-        const role = this.normalizeRole(reviewer.VaiTro);
-        return isScoringCouncil
-          ? role.includes('hoi dong cham diem')
-          : role === 'hoi dong' || role.includes('hoi dong xet duyet');
+      const defaultCouncil = await this.getOrAssignDefaultCouncil(
+        maDT,
+        requiredCouncilBusiness,
+      );
+      const members = await this.councilMemberRes.find({
+        where: { MaHoiDong: defaultCouncil.MaHoiDong },
+        relations: ['NguoiDung'],
       });
+      committeeUsers = members.map((member) => member.NguoiDung).filter(Boolean);
+      councilId = defaultCouncil.MaHoiDong;
     }
     if (committeeUsers.length === 0) {
       throw new BadRequestException(
         councilId
           ? 'Hội đồng được gán chưa có thành viên hợp lệ'
-          : `Chưa có tài khoản nào có vai trò ${councilRole}`,
+          : `Chưa cấu hình ${councilRole} mặc định có thành viên`,
       );
     }
 
@@ -313,6 +319,7 @@ export class ProjectService {
     if (approvals.some((item) => item.TrangThai === 'Từ chối')) {
       project.TrangThai = 'Từ chối';
     } else if (approvals.length > 0 && approvals.every((item) => item.TrangThai === 'Đã phê duyệt')) {
+      await this.assignDefaultMonitoringCouncil(maDT);
       project.TrangThai = 'Đã phê duyệt';
       project.NgayXetDuyet = new Date();
     } else {
@@ -361,6 +368,67 @@ export class ProjectService {
         status: item.TrangThai,
       })),
     };
+  }
+
+  private async assignDefaultMonitoringCouncil(maDT: string): Promise<void> {
+    const assignments = await this.councilAssignmentRes.find({
+      where: { MaDT: maDT },
+      relations: ['LoaiHoiDong'],
+    });
+    if (assignments.some((assignment) => assignment.LoaiHoiDong?.NghiepVu === 'monitoring')) {
+      return;
+    }
+
+    const defaultCouncils = await this.councilRes.find({
+      where: { LaHoiDongMacDinh: true },
+      relations: ['LoaiHoiDong', 'ThanhVienHoiDong'],
+      order: { MaHoiDong: 'ASC' },
+    });
+    const defaultCouncil = defaultCouncils.find(
+      (council) => council.LoaiHoiDong?.NghiepVu === 'monitoring',
+    );
+    if (!defaultCouncil) {
+      throw new BadRequestException('Chưa cấu hình hội đồng theo dõi mặc định');
+    }
+    if (defaultCouncil.ThanhVienHoiDong.length === 0) {
+      throw new BadRequestException('Hội đồng theo dõi mặc định chưa có thành viên');
+    }
+
+    await this.councilAssignmentRes.save(
+      this.councilAssignmentRes.create({
+        MaDT: maDT,
+        MaHoiDong: defaultCouncil.MaHoiDong,
+        MaLoaiHoiDong: defaultCouncil.MaLoaiHoiDong,
+      }),
+    );
+  }
+
+  private async getOrAssignDefaultCouncil(maDT: string, business: 'approval' | 'scoring'): Promise<HoiDong> {
+    const councils = await this.councilRes.find({
+      relations: ['LoaiHoiDong', 'ThanhVienHoiDong'],
+      order: { MaHoiDong: 'ASC' },
+    });
+    const councilsInBusiness = councils.filter((item) => item.LoaiHoiDong?.NghiepVu === business);
+    const configuredDefault = councilsInBusiness.find((item) => item.LaHoiDongMacDinh);
+    // Nếu cấu hình cũ đang trỏ tới hội đồng rỗng, vẫn ưu tiên hội đồng cùng
+    // nghiệp vụ đã có thành viên để tránh bỏ sót thành viên vừa được Admin thêm.
+    const council = configuredDefault?.ThanhVienHoiDong.length
+      ? configuredDefault
+      : councilsInBusiness.find((item) => item.ThanhVienHoiDong.length > 0);
+    if (!council) {
+      throw new BadRequestException(`Chưa có hội đồng ${business === 'approval' ? 'xét duyệt' : 'chấm điểm'} nào có thành viên`);
+    }
+    const assigned = await this.councilAssignmentRes.findOne({
+      where: { MaDT: maDT, MaHoiDong: council.MaHoiDong },
+    });
+    if (!assigned) {
+      await this.councilAssignmentRes.save(this.councilAssignmentRes.create({
+        MaDT: maDT,
+        MaHoiDong: council.MaHoiDong,
+        MaLoaiHoiDong: council.MaLoaiHoiDong,
+      }));
+    }
+    return council;
   }
 
   async deleteProject(id: string, taiKhoan: string) {
@@ -444,7 +512,7 @@ export class ProjectService {
 
     project.TienDo = Math.min(TD, 100);
     if (project.TienDo === 100) {
-      project.TrangThai = 'Hoàn thành';
+      project.TrangThai = 'Chờ nghiệm thu';
     }
     return this.DTRes.save(project);
   }

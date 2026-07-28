@@ -12,6 +12,8 @@ import { TaiLieu } from 'src/entity/document.entity';
 import { ThanhVienDT } from 'src/entity/pjmem.entity';
 import { MocDeTai } from 'src/entity/progress.entity';
 import { XetDuyetDeTai } from 'src/entity/project-approval.entity';
+import { BaoCaoTienDo } from 'src/entity/progress-report.entity';
+import { HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
 import { Repository } from 'typeorm';
 
 @Injectable()
@@ -26,6 +28,12 @@ export class DocumentsService {
 
     @InjectRepository(XetDuyetDeTai)
     private readonly approvalRepository: Repository<XetDuyetDeTai>,
+    @InjectRepository(BaoCaoTienDo)
+    private readonly reportRepository: Repository<BaoCaoTienDo>,
+    @InjectRepository(HoiDongDeTai)
+    private readonly councilAssignmentRepository: Repository<HoiDongDeTai>,
+    @InjectRepository(ThanhVienHoiDong)
+    private readonly councilMemberRepository: Repository<ThanhVienHoiDong>,
   ) { }
 
   async upload(
@@ -41,9 +49,14 @@ export class DocumentsService {
     await this.getMemberOrThrow(maDT, taiKhoan);
 
     const maMoc = await this.validateMilestone(dto.MaMoc, maDT);
+    const maBaoCaoTienDo = await this.validateProgressReport(
+      dto.MaBaoCaoTienDo,
+      maDT,
+      taiKhoan,
+    );
 
     // Nếu mốc đã có tài liệu thì thay thế
-    if (maMoc) {
+    if (maMoc && !maBaoCaoTienDo) {
       const oldDocument = await this.taiLieuRepository.findOne({
         where: { MaMoc: maMoc },
       });
@@ -60,6 +73,7 @@ export class DocumentsService {
     const taiLieu = this.taiLieuRepository.create({
       MaDT: maDT,
       MaMoc: maMoc,
+      MaBaoCaoTienDo: maBaoCaoTienDo,
       NguoiGui: taiKhoan,
       LoaiTaiLieu: dto.LoaiTaiLieu?.trim(),
       TenFile: file.originalname,
@@ -115,11 +129,32 @@ export class DocumentsService {
     });
   }
 
+  async findByProgressReport(reportId: number, taiKhoan: string): Promise<TaiLieu[]> {
+    const report = await this.reportRepository.findOne({ where: { Id: reportId } });
+    if (!report) {
+      throw new NotFoundException(`Không tìm thấy báo cáo tiến độ với id = ${reportId}`);
+    }
+    await this.ensureCanViewProject(report.MaDT, taiKhoan);
+    return this.taiLieuRepository.find({
+      where: { MaBaoCaoTienDo: reportId },
+      order: { NgayTaiLen: 'DESC' },
+    });
+  }
+
   async remove(id: number, taiKhoan: string): Promise<void> {
     const taiLieu = await this.findOneById(id);
 
     // Chỉ kiểm tra người này có thuộc đề tài hay không
-    await this.getMemberOrThrow(taiLieu.MaDT, taiKhoan);
+    const member = await this.getMemberOrThrow(taiLieu.MaDT, taiKhoan);
+    if (taiLieu.MaBaoCaoTienDo) {
+      const report = await this.reportRepository.findOne({ where: { Id: taiLieu.MaBaoCaoTienDo } });
+      if (!report || report.TaiKhoanNguoiGui !== taiKhoan || !['Nháp', 'Yêu cầu bổ sung'].includes(report.TrangThai)) {
+        throw new ForbiddenException('Chỉ được xóa tài liệu của báo cáo đang được chỉnh sửa');
+      }
+      if (!this.normalizeRole(member.VaiTroDT).includes('nhom truong')) {
+        throw new ForbiddenException('Chỉ nhóm trưởng được xóa tài liệu báo cáo tiến độ');
+      }
+    }
 
     await this.taiLieuRepository.remove(taiLieu);
 
@@ -158,9 +193,24 @@ export class DocumentsService {
     const approval = await this.approvalRepository.findOne({
       where: { MaDT: maDT, TaiKhoanHoiDong: taiKhoan },
     });
-    if (!approval) {
-      throw new ForbiddenException('Bạn không có quyền xem tài liệu của đề tài này');
+    if (approval) return;
+
+    const assignments = await this.councilAssignmentRepository.find({
+      where: { MaDT: maDT },
+      relations: ['LoaiHoiDong'],
+    });
+    const monitoringCouncilIds = assignments
+      .filter((assignment) => assignment.LoaiHoiDong?.NghiepVu === 'monitoring')
+      .map((assignment) => assignment.MaHoiDong);
+    if (monitoringCouncilIds.length > 0) {
+      const councilMember = await this.councilMemberRepository
+        .createQueryBuilder('member')
+        .where('member.TaiKhoan = :taiKhoan', { taiKhoan })
+        .andWhere('member.MaHoiDong IN (:...ids)', { ids: monitoringCouncilIds })
+        .getOne();
+      if (councilMember) return;
     }
+    throw new ForbiddenException('Bạn không có quyền xem tài liệu của đề tài này');
   }
 
   private async validateMilestone(
@@ -195,6 +245,38 @@ export class DocumentsService {
 
       await this.taiLieuRepository.remove(document);
     }
+  }
+
+  async removeByProgressReport(reportId: number): Promise<void> {
+    const documents = await this.taiLieuRepository.find({
+      where: { MaBaoCaoTienDo: reportId },
+    });
+    for (const document of documents) {
+      await fs.unlink(this.getPhysicalPathForDocument(document)).catch(() => undefined);
+      await this.taiLieuRepository.remove(document);
+    }
+  }
+
+  private async validateProgressReport(
+    rawReportId: number | string | undefined,
+    maDT: string,
+    taiKhoan: string,
+  ): Promise<number | undefined> {
+    if (rawReportId === undefined || rawReportId === null || rawReportId === '') return undefined;
+    const reportId = Number(rawReportId);
+    if (!Number.isInteger(reportId)) throw new BadRequestException('Mã báo cáo tiến độ không hợp lệ');
+    const report = await this.reportRepository.findOne({ where: { Id: reportId } });
+    if (!report || report.MaDT !== maDT) {
+      throw new BadRequestException('Báo cáo tiến độ không thuộc đề tài này');
+    }
+    const member = await this.getMemberOrThrow(maDT, taiKhoan);
+    if (report.TaiKhoanNguoiGui !== taiKhoan || !this.normalizeRole(member.VaiTroDT).includes('nhom truong')) {
+      throw new ForbiddenException('Chỉ nhóm trưởng tạo báo cáo mới được đính kèm minh chứng');
+    }
+    if (!['Nháp', 'Yêu cầu bổ sung'].includes(report.TrangThai)) {
+      throw new BadRequestException('Chỉ được thêm tài liệu khi báo cáo ở trạng thái Nháp hoặc Yêu cầu bổ sung');
+    }
+    return reportId;
   }
 
   private getPhysicalPathForDocument(taiLieu: TaiLieu): string {

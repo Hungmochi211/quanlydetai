@@ -43,6 +43,10 @@ export class HoiDong {
   @Column({ type: 'nvarchar', length: 'MAX', nullable: true })
   MoTa?: string;
 
+  // Chỉ dùng một hội đồng mặc định cho mỗi nghiệp vụ tự động (ví dụ: monitoring).
+  @Column({ type: 'bit', default: false })
+  LaHoiDongMacDinh!: boolean;
+
   @Column({ type: 'datetime', default: () => 'GETDATE()' })
   NgayTao!: Date;
 

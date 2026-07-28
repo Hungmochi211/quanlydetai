@@ -13,6 +13,7 @@ import { DeTai } from './project.entity';
 import { TaiLieu } from './document.entity';
 import { ThanhVienDT } from './pjmem.entity';
 import { ThanhVienMocDT } from './pgmem.entity';
+import { BaoCaoTienDo } from './progress-report.entity';
 
 @Entity('MocDeTai')
 export class MocDeTai {
@@ -61,4 +62,7 @@ export class MocDeTai {
 
   @OneToMany(() => ThanhVienMocDT, (thanhVienMoc) => thanhVienMoc.moc)
   thanhVienMocs: ThanhVienMocDT[];
+
+  @OneToMany(() => BaoCaoTienDo, (baoCao) => baoCao.MocDeTai)
+  dsBaoCaoTienDo: BaoCaoTienDo[];
 }

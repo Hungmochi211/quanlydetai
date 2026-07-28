@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { DeTai } from './project.entity';
 import { MocDeTai } from './progress.entity';
+import { BaoCaoTienDo } from './progress-report.entity';
 
 @Entity('TaiLieu')
 export class TaiLieu {
@@ -20,6 +21,9 @@ export class TaiLieu {
 
   @Column({ nullable: true })
   MaMoc: number;
+
+  @Column({ type: 'int', nullable: true })
+  MaBaoCaoTienDo?: number;
 
   @Column({ type: 'nvarchar', length: 255 })
   TenFile: string;
@@ -48,4 +52,8 @@ export class TaiLieu {
   @ManyToOne(() => MocDeTai, (moc) => moc.dsTaiLieu)
   @JoinColumn({ name: 'MaMoc' })
   mocDeTai: MocDeTai;
+
+  @ManyToOne(() => BaoCaoTienDo, (baoCao) => baoCao.TaiLieu, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'MaBaoCaoTienDo' })
+  baoCaoTienDo?: BaoCaoTienDo;
 }

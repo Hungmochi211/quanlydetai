@@ -11,6 +11,10 @@ export class AddTaiLieuDto {
   @IsOptional()
   MaMoc?: number;
 
+  @ApiProperty({ required: false, description: 'ID báo cáo tiến độ cần đính kèm tài liệu' })
+  @IsOptional()
+  MaBaoCaoTienDo?: number;
+
   @ApiProperty()
   @IsOptional()
   @IsString()

@@ -69,8 +69,11 @@ export class CouncilsService implements OnApplicationBootstrap {
       TenHoiDong: dto.TenHoiDong.trim(),
       MaLoaiHoiDong: dto.MaLoaiHoiDong,
       MoTa: dto.MoTa?.trim() || undefined,
+      LaHoiDongMacDinh: dto.LaHoiDongMacDinh ?? false,
     });
-    return this.councilRepository.save(council);
+    const saved = await this.councilRepository.save(council);
+    if (saved.LaHoiDongMacDinh) await this.setAsDefault(saved);
+    return this.findOne(saved.MaHoiDong);
   }
 
   async update(id: number, dto: UpdateCouncilDto) {
@@ -82,8 +85,11 @@ export class CouncilsService implements OnApplicationBootstrap {
         ...(dto.TenHoiDong !== undefined ? { TenHoiDong: dto.TenHoiDong.trim() } : {}),
         ...(dto.MaLoaiHoiDong !== undefined ? { MaLoaiHoiDong: dto.MaLoaiHoiDong } : {}),
         ...(dto.MoTa !== undefined ? { MoTa: dto.MoTa.trim() || null } : {}),
+        ...(dto.LaHoiDongMacDinh !== undefined ? { LaHoiDongMacDinh: dto.LaHoiDongMacDinh } : {}),
       },
     );
+    const updated = await this.findOne(id);
+    if (dto.LaHoiDongMacDinh) await this.setAsDefault(updated);
     return this.findOne(id);
   }
 
@@ -204,68 +210,61 @@ export class CouncilsService implements OnApplicationBootstrap {
     return type;
   }
 
+  private async setAsDefault(council: HoiDong): Promise<void> {
+    const type = await this.findType(council.MaLoaiHoiDong);
+    const typesInBusiness = await this.councilTypeRepository.find({
+      where: { NghiepVu: type.NghiepVu },
+    });
+    const typeIds = typesInBusiness.map((item) => item.MaLoaiHoiDong);
+    await this.councilRepository
+      .createQueryBuilder()
+      .update(HoiDong)
+      .set({ LaHoiDongMacDinh: false })
+      .where('MaLoaiHoiDong IN (:...typeIds)', { typeIds })
+      .execute();
+    await this.councilRepository.update(
+      { MaHoiDong: council.MaHoiDong },
+      { LaHoiDongMacDinh: true },
+    );
+  }
+
   private async seedDefaultCouncils() {
     const defaults = [
       {
-        typeName: 'Hội đồng Khoa học - Đào tạo Khoa',
         business: 'approval',
-        typeDescription: 'Xét duyệt đề cương và đề tài cấp khoa.',
-        councilName: 'Hội đồng Khoa học - Đào tạo Khoa',
+        councilName: 'Hội đồng xét duyệt',
         councilDescription: 'Xét duyệt đề cương cấp cơ sở.',
       },
       {
-        typeName: 'Hội đồng xét chọn / tuyển chọn / thẩm định',
-        business: 'approval',
-        typeDescription: 'Xét chọn danh mục và thẩm định đề tài trước khi phê duyệt.',
-        councilName: 'Hội đồng xét chọn / tuyển chọn / thẩm định',
-        councilDescription: 'Xét chọn danh mục, thẩm định đề tài trước khi phê duyệt.',
-      },
-      {
-        typeName: 'Hội đồng kiểm tra, giám sát',
         business: 'monitoring',
-        typeDescription: 'Theo dõi thực hiện đề tài và kiểm tra tiến độ.',
-        councilName: 'Hội đồng kiểm tra, giám sát',
+        councilName: 'Hội đồng theo dõi',
         councilDescription: 'Theo dõi thực hiện đề tài và kiểm tra tiến độ.',
       },
       {
-        typeName: 'Hội đồng nghiệm thu',
         business: 'scoring',
-        typeDescription: 'Đánh giá kết quả cuối cùng, chấm điểm và xếp loại.',
         councilName: 'Hội đồng nghiệm thu',
         councilDescription: 'Đánh giá kết quả cuối cùng, chấm điểm và xếp loại.',
       },
       {
-        typeName: 'Hội đồng thanh lý',
         business: 'liquidation',
-        typeDescription: 'Xử lý đề tài không đạt, quá hạn hoặc có quyết định thanh lý.',
         councilName: 'Hội đồng thanh lý',
         councilDescription: 'Xử lý đề tài không đạt, quá hạn hoặc có quyết định thanh lý.',
-      },
-      {
-        typeName: 'Hội đồng xét chọn công trình SVNCKH',
-        business: 'other',
-        typeDescription: 'Chọn công trình tham gia hội nghị hoặc giải thưởng SVNCKH.',
-        councilName: 'Hội đồng xét chọn công trình SVNCKH',
-        councilDescription: 'Chọn công trình tham gia hội nghị/giải thưởng cấp Khoa hoặc Học viện.',
       },
     ];
 
     for (const item of defaults) {
-      let type = await this.councilTypeRepository.findOne({
-        where: { TenLoaiHoiDong: item.typeName },
+      // Chỉ dùng loại hội đồng đã có trong database; tuyệt đối không seed thêm loại mới.
+      const type = await this.councilTypeRepository.findOne({
+        where: { NghiepVu: item.business },
+        order: { MaLoaiHoiDong: 'ASC' },
       });
       if (!type) {
-        type = await this.councilTypeRepository.save(
-          this.councilTypeRepository.create({
-            TenLoaiHoiDong: item.typeName,
-            NghiepVu: item.business,
-            MoTa: item.typeDescription,
-          }),
-        );
+        this.logger.warn(`Không seed ${item.councilName}: chưa có LoaiHoiDong nghiệp vụ ${item.business}`);
+        continue;
       }
 
       const council = await this.councilRepository.findOne({
-        where: { TenHoiDong: item.councilName },
+        where: { MaLoaiHoiDong: type.MaLoaiHoiDong },
       });
       if (!council) {
         await this.councilRepository.save(
@@ -273,6 +272,7 @@ export class CouncilsService implements OnApplicationBootstrap {
             TenHoiDong: item.councilName,
             MaLoaiHoiDong: type.MaLoaiHoiDong,
             MoTa: item.councilDescription,
+            LaHoiDongMacDinh: true,
           }),
         );
       }

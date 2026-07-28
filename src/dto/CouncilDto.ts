@@ -1,4 +1,4 @@
-import { IsIn, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -58,6 +58,11 @@ export class CreateCouncilDto {
   @IsOptional()
   @IsString()
   MoTa?: string;
+
+  @ApiProperty({ required: false, example: false, description: 'Tự động gán cho đề tài khi đi vào luồng nghiệp vụ tương ứng' })
+  @IsOptional()
+  @IsBoolean()
+  LaHoiDongMacDinh?: boolean;
 }
 
 export class UpdateCouncilDto {
@@ -78,6 +83,11 @@ export class UpdateCouncilDto {
   @IsOptional()
   @IsString()
   MoTa?: string;
+
+  @ApiProperty({ required: false, example: true })
+  @IsOptional()
+  @IsBoolean()
+  LaHoiDongMacDinh?: boolean;
 }
 
 export class AddCouncilMemberDto {

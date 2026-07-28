@@ -9,7 +9,7 @@ import { NguoiDung } from 'src/entity/user.entity';
 import { TaiLieu } from 'src/entity/document.entity';
 import { AuthModule } from 'src/auth/auth.module';
 import { NotificationsModule } from 'src/notifications/notifications.module';
-import { HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
+import { HoiDong, HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
 
 @Module({
   imports: [
@@ -20,6 +20,7 @@ import { HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
       NguoiDung,
       TaiLieu,
       HoiDongDeTai,
+      HoiDong,
       ThanhVienHoiDong,
     ]),
     AuthModule,

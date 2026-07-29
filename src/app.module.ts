@@ -26,10 +26,17 @@ import { NhanXetDeTai } from './entity/project-comment.entity';
 import { CommentsModule } from './comments/comments.module';
 import { AdminUsersModule } from './admin-users/admin-users.module';
 import { CouncilsModule } from './councils/councils.module';
-import { HoiDong, HoiDongDeTai, LoaiHoiDong, ThanhVienHoiDong } from './entity/council.entity';
+import {
+  HoiDong,
+  HoiDongDeTai,
+  LoaiHoiDong,
+  ThanhVienHoiDong,
+} from './entity/council.entity';
 import { BaoCaoTienDo } from './entity/progress-report.entity';
 import { PhanHoiBaoCaoTienDo } from './entity/progress-report-review.entity';
 import { ProgressReportsModule } from './progress-reports/progress-reports.module';
+import { AcceptanceModule } from './acceptance/acceptance.module';
+import { HoSoNghiemThu, PhieuChamNghiemThu } from './entity/acceptance.entity';
 
 @Module({
   imports: [
@@ -49,6 +56,7 @@ import { ProgressReportsModule } from './progress-reports/progress-reports.modul
     AdminUsersModule,
     CouncilsModule,
     ProgressReportsModule,
+    AcceptanceModule,
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -77,6 +85,8 @@ import { ProgressReportsModule } from './progress-reports/progress-reports.modul
           LoaiHoiDong,
           BaoCaoTienDo,
           PhanHoiBaoCaoTienDo,
+          HoSoNghiemThu,
+          PhieuChamNghiemThu,
         ],
         synchronize: config.get<string>('DB_SYNCHRONIZE') === 'true',
         options: {

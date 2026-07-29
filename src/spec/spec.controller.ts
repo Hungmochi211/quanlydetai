@@ -1,19 +1,9 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Patch,
-  Param,
-  Delete,
-  Query,
-  Search,
-} from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { SpecService } from './spec.service';
 
 @Controller('spec')
 export class SpecController {
-  constructor(private readonly specService: SpecService) {}
+  constructor(private readonly specService: SpecService) { }
 
   @Get('chuyennganh')
   findAll() {

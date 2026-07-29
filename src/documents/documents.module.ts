@@ -9,11 +9,24 @@ import { XetDuyetDeTai } from 'src/entity/project-approval.entity';
 import { AuthModule } from 'src/auth/auth.module';
 import { BaoCaoTienDo } from 'src/entity/progress-report.entity';
 import { HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
+import { HoSoNghiemThu } from 'src/entity/acceptance.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([TaiLieu, ThanhVienDT, MocDeTai, XetDuyetDeTai, BaoCaoTienDo, HoiDongDeTai, ThanhVienHoiDong]), AuthModule],
+  imports: [
+    TypeOrmModule.forFeature([
+      TaiLieu,
+      ThanhVienDT,
+      MocDeTai,
+      XetDuyetDeTai,
+      BaoCaoTienDo,
+      HoSoNghiemThu,
+      HoiDongDeTai,
+      ThanhVienHoiDong,
+    ]),
+    AuthModule,
+  ],
   controllers: [DocumentsController],
   providers: [DocumentsService],
-  exports: [DocumentsService]
+  exports: [DocumentsService],
 })
-export class DocumentsModule { }
+export class DocumentsModule {}

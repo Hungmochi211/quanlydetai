@@ -1,10 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-  NotFoundException,
-  OnApplicationBootstrap,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, OnApplicationBootstrap, } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DeTai } from 'src/entity/project.entity';
 import { NguoiDung } from 'src/entity/user.entity';
@@ -29,7 +23,7 @@ export class CouncilsService implements OnApplicationBootstrap {
     @InjectRepository(LoaiHoiDong) private readonly councilTypeRepository: Repository<LoaiHoiDong>,
     @InjectRepository(NguoiDung) private readonly userRepository: Repository<NguoiDung>,
     @InjectRepository(DeTai) private readonly projectRepository: Repository<DeTai>,
-  ) {}
+  ) { }
 
   async onApplicationBootstrap() {
     try {

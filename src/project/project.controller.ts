@@ -1,14 +1,4 @@
-import {
-  Body,
-  Controller,
-  Post,
-  Get,
-  UseGuards,
-  Req,
-  Param,
-  Patch,
-  Delete,
-} from '@nestjs/common';
+import { Body, Controller, Post, Get, UseGuards, Req, Param, Patch, Delete, } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ProjectService } from './project.service';
 import { AuthGuard } from 'src/auth/auth.guard';
@@ -22,7 +12,7 @@ import { ReviewProjectDto, SubmitProjectForApprovalDto } from 'src/dto/ProjectAp
 @ApiBearerAuth()
 @UseGuards(AuthGuard)
 export class ProjectController {
-  constructor(private readonly projectService: ProjectService) {}
+  constructor(private readonly projectService: ProjectService) { }
 
   @Post('registerproject')
   async registerProject(@Req() req: Request, @Body() prDto: RegisterTopicDto) {

@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DateDto } from 'src/dto/DateDto';
 import { UpdateProjectDto } from 'src/dto/UpdateProjectDto';
@@ -46,7 +41,7 @@ export class ProjectService {
     private councilMemberRes: Repository<ThanhVienHoiDong>,
 
     private readonly notificationsService: NotificationsService,
-  ) {}
+  ) { }
 
   private normalizeRole(role?: string) {
     return (role || '')

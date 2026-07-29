@@ -1,15 +1,4 @@
-import {
-  Body,
-  Controller,
-  Post,
-  Get,
-  Req,
-  UseGuards,
-  Patch,
-  Param,
-  Delete,
-  ParseIntPipe,
-} from '@nestjs/common';
+import { Body, Controller, Post, Get, Req, UseGuards, Patch, Param, Delete, ParseIntPipe, } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
 import { NotificationDto } from 'src/dto/notificationDto';
@@ -20,7 +9,7 @@ import { AuthGuard } from 'src/auth/auth.guard';
 @ApiBearerAuth()
 @UseGuards(AuthGuard)
 export class NotificationController {
-  constructor(private readonly notificationService: NotificationsService) {}
+  constructor(private readonly notificationService: NotificationsService) { }
 
   @Post('createnotifi')
   async create(@Req() req: Request, @Body() createNoti: NotificationDto) {

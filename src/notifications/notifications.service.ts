@@ -1,10 +1,4 @@
-import {
-  Injectable,
-  forwardRef,
-  Inject,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException, } from '@nestjs/common';
 import { NotificationDto } from '../dto/notificationDto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ThongBao } from 'src/entity/notification.entity';
@@ -19,7 +13,7 @@ export class NotificationsService {
 
     @InjectRepository(NguoiDung)
     private userRes: Repository<NguoiDung>,
-  ) {}
+  ) { }
 
   async create(user: any, createNotificationDto: NotificationDto) {
     const recipient = await this.userRes.findOne({

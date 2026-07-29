@@ -1,17 +1,6 @@
-import {
-  Column,
-  Entity,
-  JoinColumn,
-  ManyToOne,
-  PrimaryGeneratedColumn,
-  CreateDateColumn,
-  UpdateDateColumn,
-  OneToMany,
-  ManyToMany,
-} from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
 import { DeTai } from './project.entity';
 import { TaiLieu } from './document.entity';
-import { ThanhVienDT } from './pjmem.entity';
 import { ThanhVienMocDT } from './pgmem.entity';
 import { BaoCaoTienDo } from './progress-report.entity';
 

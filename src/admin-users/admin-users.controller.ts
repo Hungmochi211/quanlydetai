@@ -1,14 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Patch,
-  Post,
-  Query,
-  Request,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Request, UseGuards, } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from 'src/auth/auth.guard';
 import {
@@ -25,7 +15,7 @@ import { AdminUsersService } from './admin-users.service';
 @ApiBearerAuth()
 @UseGuards(AuthGuard, AdminGuard)
 export class AdminUsersController {
-  constructor(private readonly adminUsersService: AdminUsersService) {}
+  constructor(private readonly adminUsersService: AdminUsersService) { }
 
   @Get()
   findAll(@Query() query: AdminUsersQueryDto) {

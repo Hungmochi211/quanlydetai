@@ -1,17 +1,8 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import bcrypt from 'bcrypt';
 import { Repository } from 'typeorm';
-import {
-  AdminCreateUserDto,
-  AdminResetPasswordDto,
-  AdminUpdateUserDto,
-  AdminUsersQueryDto,
-} from 'src/dto/AdminUserDto';
+import { AdminCreateUserDto, AdminResetPasswordDto, AdminUpdateUserDto, AdminUsersQueryDto } from 'src/dto/AdminUserDto';
 import { NguoiDung } from 'src/entity/user.entity';
 
 const SAFE_USER_FIELDS = [
@@ -28,7 +19,7 @@ export class AdminUsersService {
   constructor(
     @InjectRepository(NguoiDung)
     private readonly userRepository: Repository<NguoiDung>,
-  ) {}
+  ) { }
 
   async findAll(query: AdminUsersQueryDto) {
     const page = query.page ?? 1;

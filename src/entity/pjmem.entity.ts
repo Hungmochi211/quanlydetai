@@ -1,13 +1,4 @@
-import {
-  Column,
-  Entity,
-  JoinColumn,
-  ManyToOne,
-  ManyToMany,
-  PrimaryGeneratedColumn,
-  OneToOne,
-  OneToMany,
-} from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, OneToOne, OneToMany, } from 'typeorm';
 import { DeTai } from './project.entity';
 import { NguoiDung } from './user.entity';
 import { ThanhVienMocDT } from './pgmem.entity';

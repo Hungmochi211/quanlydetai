@@ -1,12 +1,4 @@
-import {
-  Body,
-  Controller,
-  Post,
-  UseGuards,
-  Get,
-  Request,
-  Put,
-} from '@nestjs/common';
+import { Body, Controller, Post, UseGuards, Get, Request, Put } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthGuard } from './auth.guard';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
@@ -17,7 +9,7 @@ import { UpdateProfileDto } from 'src/dto/UpdateProfileDto';
 @Controller('auth')
 @ApiTags('auth')
 export class AuthCotroller {
-  constructor(private authService: AuthService) {}
+  constructor(private authService: AuthService) { }
 
   @Post('login')
   signIn(@Body() signInDto: LoginDto) {

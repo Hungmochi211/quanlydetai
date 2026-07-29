@@ -1,12 +1,4 @@
-import {
-  Column,
-  Entity,
-  JoinColumn,
-  ManyToOne,
-  OneToMany,
-  OneToOne,
-  PrimaryColumn,
-} from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryColumn } from 'typeorm';
 import { DeTai } from './project.entity';
 import { NguoiDung } from './user.entity';
 import { ChuyenNganh } from './spec.entity';

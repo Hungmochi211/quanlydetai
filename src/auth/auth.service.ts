@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, UnauthorizedException, } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { NguoiDung } from 'src/entity/user.entity';
 import { Repository } from 'typeorm';
@@ -24,7 +19,7 @@ export class AuthService {
 
     @InjectRepository(NguoiDung)
     private userRes: Repository<NguoiDung>,
-  ) {}
+  ) { }
 
   async signIn(
     TaiKhoan: string,

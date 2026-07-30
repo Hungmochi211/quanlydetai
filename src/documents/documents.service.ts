@@ -8,6 +8,7 @@ import { ThanhVienDT } from 'src/entity/pjmem.entity';
 import { MocDeTai } from 'src/entity/progress.entity';
 import { XetDuyetDeTai } from 'src/entity/project-approval.entity';
 import { BaoCaoTienDo } from 'src/entity/progress-report.entity';
+import { HoSoNghiemThu } from 'src/entity/acceptance.entity';
 import { HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
 import { Repository } from 'typeorm';
 
@@ -25,6 +26,8 @@ export class DocumentsService {
     private readonly approvalRepository: Repository<XetDuyetDeTai>,
     @InjectRepository(BaoCaoTienDo)
     private readonly reportRepository: Repository<BaoCaoTienDo>,
+    @InjectRepository(HoSoNghiemThu)
+    private readonly acceptanceDossierRepository: Repository<HoSoNghiemThu>,
     @InjectRepository(HoiDongDeTai)
     private readonly councilAssignmentRepository: Repository<HoiDongDeTai>,
     @InjectRepository(ThanhVienHoiDong)
@@ -49,6 +52,19 @@ export class DocumentsService {
       maDT,
       taiKhoan,
     );
+    const maHoSoNghiemThu = await this.validateAcceptanceDossier(
+      dto.MaHoSoNghiemThu,
+      maDT,
+      taiKhoan,
+    );
+
+    const attachmentTargets = [maMoc, maBaoCaoTienDo, maHoSoNghiemThu]
+      .filter((value) => value !== undefined);
+    if (attachmentTargets.length > 1) {
+      throw new BadRequestException(
+        'Một tài liệu chỉ được đính kèm cho một mốc, báo cáo hoặc hồ sơ nghiệm thu',
+      );
+    }
 
     // Nếu mốc đã có tài liệu thì thay thế
     if (maMoc && !maBaoCaoTienDo) {
@@ -69,6 +85,7 @@ export class DocumentsService {
       MaDT: maDT,
       MaMoc: maMoc,
       MaBaoCaoTienDo: maBaoCaoTienDo,
+      MaHoSoNghiemThu: maHoSoNghiemThu,
       NguoiGui: taiKhoan,
       LoaiTaiLieu: dto.LoaiTaiLieu?.trim(),
       TenFile: file.originalname,
@@ -194,14 +211,14 @@ export class DocumentsService {
       where: { MaDT: maDT },
       relations: ['LoaiHoiDong'],
     });
-    const monitoringCouncilIds = assignments
-      .filter((assignment) => assignment.LoaiHoiDong?.NghiepVu === 'monitoring')
-      .map((assignment) => assignment.MaHoiDong);
-    if (monitoringCouncilIds.length > 0) {
+    // Thành viên của mọi hội đồng đã được gán cho đề tài (theo dõi, chấm điểm,
+    // nghiệm thu...) đều cần xem được tài liệu để thực hiện nghiệp vụ của mình.
+    const assignedCouncilIds = assignments.map((assignment) => assignment.MaHoiDong);
+    if (assignedCouncilIds.length > 0) {
       const councilMember = await this.councilMemberRepository
         .createQueryBuilder('member')
         .where('member.TaiKhoan = :taiKhoan', { taiKhoan })
-        .andWhere('member.MaHoiDong IN (:...ids)', { ids: monitoringCouncilIds })
+        .andWhere('member.MaHoiDong IN (:...ids)', { ids: assignedCouncilIds })
         .getOne();
       if (councilMember) return;
     }
@@ -272,6 +289,40 @@ export class DocumentsService {
       throw new BadRequestException('Chỉ được thêm tài liệu khi báo cáo ở trạng thái Nháp hoặc Yêu cầu bổ sung');
     }
     return reportId;
+  }
+
+  private async validateAcceptanceDossier(
+    rawDossierId: number | string | undefined,
+    maDT: string,
+    taiKhoan: string,
+  ): Promise<number | undefined> {
+    if (rawDossierId === undefined || rawDossierId === null || rawDossierId === '') {
+      return undefined;
+    }
+
+    const dossierId = Number(rawDossierId);
+    if (!Number.isInteger(dossierId)) {
+      throw new BadRequestException('Mã hồ sơ nghiệm thu không hợp lệ');
+    }
+
+    const dossier = await this.acceptanceDossierRepository.findOne({
+      where: { Id: dossierId },
+    });
+    if (!dossier || dossier.MaDT !== maDT) {
+      throw new BadRequestException('Hồ sơ nghiệm thu không thuộc đề tài này');
+    }
+    if (dossier.TaiKhoanNguoiGui !== taiKhoan) {
+      throw new ForbiddenException(
+        'Chỉ nhóm trưởng tạo hồ sơ mới được đính kèm tài liệu nghiệm thu',
+      );
+    }
+    if (!['Nháp', 'Yêu cầu bổ sung'].includes(dossier.TrangThai)) {
+      throw new BadRequestException(
+        'Chỉ được thêm tài liệu khi hồ sơ nghiệm thu ở trạng thái Nháp hoặc Yêu cầu bổ sung',
+      );
+    }
+
+    return dossierId;
   }
 
   private getPhysicalPathForDocument(taiLieu: TaiLieu): string {

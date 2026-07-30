@@ -22,6 +22,7 @@ import { TaiLieu } from './entity/document.entity';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThanhVienMocDT } from './entity/pgmem.entity';
 import { XetDuyetDeTai } from './entity/project-approval.entity';
+import { LichSuXetDuyetDeTai } from './entity/project-approval-history.entity';
 import { NhanXetDeTai } from './entity/project-comment.entity';
 import { CommentsModule } from './comments/comments.module';
 import { AdminUsersModule } from './admin-users/admin-users.module';
@@ -78,6 +79,7 @@ import { HoSoNghiemThu, PhieuChamNghiemThu } from './entity/acceptance.entity';
           TaiLieu,
           ThanhVienMocDT,
           XetDuyetDeTai,
+          LichSuXetDuyetDeTai,
           NhanXetDeTai,
           HoiDong,
           ThanhVienHoiDong,

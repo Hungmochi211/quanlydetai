@@ -5,6 +5,7 @@ import { UpdateProjectDto } from 'src/dto/UpdateProjectDto';
 import { RegisterTopicDto } from 'src/dto/RegisterTopicDto';
 import { ThanhVienDT } from 'src/entity/pjmem.entity';
 import { XetDuyetDeTai } from 'src/entity/project-approval.entity';
+import { LichSuXetDuyetDeTai } from 'src/entity/project-approval-history.entity';
 import { DeTai } from 'src/entity/project.entity';
 import { NguoiDung } from 'src/entity/user.entity';
 import { TaiLieu } from 'src/entity/document.entity';
@@ -24,6 +25,9 @@ export class ProjectService {
 
     @InjectRepository(XetDuyetDeTai)
     private approvalRes: Repository<XetDuyetDeTai>,
+
+    @InjectRepository(LichSuXetDuyetDeTai)
+    private approvalHistoryRes: Repository<LichSuXetDuyetDeTai>,
 
     @InjectRepository(NguoiDung)
     private userRes: Repository<NguoiDung>,
@@ -63,19 +67,69 @@ export class ProjectService {
     await this.ensureProjectLeader(maDT, taiKhoan);
   }
 
-  private async ensureProjectCanBeEdited(project: DeTai, taiKhoan: string) {
+  private async ensureProjectCanBeEdited(
+    project: DeTai,
+    taiKhoan: string,
+    allowRejectedProject = false,
+  ) {
     await this.ensureProjectLeader(project.MaDT, taiKhoan);
 
-    if (project.TrangThai !== 'Nháp') {
-      throw new BadRequestException('Chỉ được sửa hoặc xóa đề tài ở trạng thái Nháp');
+    const editableStatuses = allowRejectedProject ? ['Nháp', 'Từ chối'] : ['Nháp'];
+    if (!editableStatuses.includes(project.TrangThai)) {
+      throw new BadRequestException(
+        allowRejectedProject
+          ? 'Chỉ được sửa đề tài ở trạng thái Nháp hoặc Từ chối'
+          : 'Chỉ được xóa đề tài ở trạng thái Nháp',
+      );
     }
 
     const submittedForApproval = await this.approvalRes.count({
       where: { MaDT: project.MaDT, LoaiHoiDong: 'Xét duyệt' },
     });
-    if (submittedForApproval > 0) {
+    if (submittedForApproval > 0 && project.TrangThai !== 'Từ chối') {
       throw new BadRequestException('Đề tài đã gửi Hội đồng xét duyệt nên không thể sửa hoặc xóa');
     }
+  }
+
+  private async archiveRejectedApprovalRound(maDT: string): Promise<XetDuyetDeTai[]> {
+    const currentApprovals = await this.approvalRes.find({
+      where: { MaDT: maDT, LoaiHoiDong: 'Xét duyệt' },
+    });
+    const rejectedApprovals = currentApprovals.filter(
+      (approval) => approval.TrangThai === 'Từ chối',
+    );
+
+    if (rejectedApprovals.length === 0) return [];
+
+    const latestHistory = await this.approvalHistoryRes.find({
+      where: { MaDT: maDT },
+      order: { LanXetDuyet: 'DESC', Id: 'DESC' },
+      take: 1,
+    });
+    const nextRound = (latestHistory[0]?.LanXetDuyet ?? 0) + 1;
+
+    await this.approvalHistoryRes.save(
+      rejectedApprovals.map((approval) =>
+        this.approvalHistoryRes.create({
+          MaDT: approval.MaDT,
+          LanXetDuyet: nextRound,
+          TaiKhoanHoiDong: approval.TaiKhoanHoiDong,
+          MaHoiDong: approval.MaHoiDong,
+          LoaiHoiDong: approval.LoaiHoiDong,
+          TrangThai: approval.TrangThai,
+          GhiChu: approval.GhiChu,
+          NgayTao: approval.NgayTao,
+          NgayPhanHoi: approval.NgayPhanHoi,
+        }),
+      ),
+    );
+    await this.approvalRes.delete({
+      MaDT: maDT,
+      LoaiHoiDong: 'Xét duyệt',
+      TrangThai: 'Từ chối',
+    });
+
+    return rejectedApprovals;
   }
 
   async registerProject(user: any, prDto: RegisterTopicDto) {
@@ -202,9 +256,14 @@ export class ProjectService {
     const existingApprovals = await this.approvalRes.count({
       where: { MaDT: maDT, LoaiHoiDong: councilType },
     });
-    if (existingApprovals > 0) {
+    const isResubmittingRejectedProject = !isScoringCouncil && project.TrangThai === 'Từ chối';
+    if (existingApprovals > 0 && !isResubmittingRejectedProject) {
       throw new BadRequestException(`Đề tài đã được gửi ${councilRole} và không thể gửi lại`);
     }
+
+    const rejectedApprovals = isResubmittingRejectedProject
+      ? await this.archiveRejectedApprovalRound(maDT)
+      : [];
 
     let committeeUsers: NguoiDung[];
     let councilId: number | undefined;
@@ -234,16 +293,25 @@ export class ProjectService {
       committeeUsers = members.map((member) => member.NguoiDung).filter(Boolean);
       councilId = defaultCouncil.MaHoiDong;
     }
-    if (committeeUsers.length === 0) {
+    const rejectedAccounts = new Set(
+      rejectedApprovals.map((approval) => approval.TaiKhoanHoiDong),
+    );
+    const reviewersToCreate = isResubmittingRejectedProject
+      ? committeeUsers.filter((user) => rejectedAccounts.has(user.TaiKhoan))
+      : committeeUsers;
+
+    if (reviewersToCreate.length === 0) {
       throw new BadRequestException(
-        councilId
-          ? 'Hội đồng được gán chưa có thành viên hợp lệ'
-          : `Chưa cấu hình ${councilRole} mặc định có thành viên`,
+        isResubmittingRejectedProject
+          ? 'Không còn thành viên từ chối nào thuộc hội đồng hiện tại để gửi lại'
+          : councilId
+            ? 'Hội đồng được gán chưa có thành viên hợp lệ'
+            : `Chưa cấu hình ${councilRole} mặc định có thành viên`,
       );
     }
 
     await this.approvalRes.save(
-      committeeUsers.map(({ TaiKhoan }) =>
+      reviewersToCreate.map(({ TaiKhoan }) =>
         this.approvalRes.create({
           MaDT: maDT,
           TaiKhoanHoiDong: TaiKhoan,
@@ -262,13 +330,13 @@ export class ProjectService {
     }
 
     await Promise.all(
-      committeeUsers.map(({ TaiKhoan }) =>
+      reviewersToCreate.map(({ TaiKhoan }) =>
         this.notificationsService.create(
           { TaiKhoan: sender },
           {
             TkNguoiNhan: TaiKhoan,
             TieuDe: isScoringCouncil ? 'Có đề tài chờ chấm điểm' : 'Có đề tài chờ xét duyệt',
-            NoiDung: `Đề tài "${project.TenDT}" đang chờ bạn ${isScoringCouncil ? 'chấm điểm' : 'xét duyệt'}.${dto.note ? ` Ghi chú: ${dto.note}` : ''}`,
+            NoiDung: `Đề tài "${project.TenDT}" đang chờ bạn ${isScoringCouncil ? 'chấm điểm' : 'xét duyệt'}${isResubmittingRejectedProject ? ' lại' : ''}.${dto.note ? ` Ghi chú: ${dto.note}` : ''}`,
             NgayTao: new Date(),
           },
         ),
@@ -322,6 +390,27 @@ export class ProjectService {
     }
     await this.DTRes.save(project);
 
+    if (dto.decision === 'rejected') {
+      const leader = await this.getLeaderById(maDT);
+      if (leader) {
+        const reviewers = await this.userRes.find({
+          where: { TaiKhoan: In([reviewerAccount]) },
+        });
+        const reviewerName = reviewers[0]?.TenDayDu || reviewerAccount;
+        const reason = approval.GhiChu || 'Chưa cung cấp lý do cụ thể';
+
+        await this.notificationsService.create(
+          { TaiKhoan: reviewerAccount },
+          {
+            TkNguoiNhan: leader.TaiKhoan,
+            TieuDe: 'Đề tài bị từ chối xét duyệt',
+            NoiDung: `Hội đồng ${reviewerName} đã từ chối đề tài "${project.TenDT}". Lý do: ${reason}`,
+            NgayTao: new Date(),
+          },
+        );
+      }
+    }
+
     return this.getApprovalSummary(maDT);
   }
 
@@ -342,6 +431,27 @@ export class ProjectService {
       NguoiDung: {
         TaiKhoan: approval.TaiKhoanHoiDong,
         TenDayDu: namesByAccount.get(approval.TaiKhoanHoiDong) || approval.TaiKhoanHoiDong,
+      },
+    }));
+  }
+
+  async getApprovalHistory(maDT: string) {
+    const history = await this.approvalHistoryRes.find({
+      where: { MaDT: maDT, LoaiHoiDong: 'Xét duyệt' },
+      order: { LanXetDuyet: 'DESC', NgayLuu: 'DESC', Id: 'DESC' },
+    });
+
+    const accounts = [...new Set(history.map((item) => item.TaiKhoanHoiDong))];
+    const users = accounts.length
+      ? await this.userRes.find({ where: { TaiKhoan: In(accounts) } })
+      : [];
+    const namesByAccount = new Map(users.map((user) => [user.TaiKhoan, user.TenDayDu]));
+
+    return history.map((item) => ({
+      ...item,
+      NguoiDung: {
+        TaiKhoan: item.TaiKhoanHoiDong,
+        TenDayDu: namesByAccount.get(item.TaiKhoanHoiDong) || item.TaiKhoanHoiDong,
       },
     }));
   }
@@ -448,7 +558,7 @@ export class ProjectService {
     if (!project) {
       throw new NotFoundException('Không tìm thấy đề tài này');
     }
-    await this.ensureProjectCanBeEdited(project, taiKhoan);
+    await this.ensureProjectCanBeEdited(project, taiKhoan, true);
 
     if (dto.TenDT !== undefined) project.TenDT = dto.TenDT.trim();
     if (dto.ChuyenNganh !== undefined) project.ChuyenNganh = dto.ChuyenNganh;

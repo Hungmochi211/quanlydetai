@@ -59,6 +59,11 @@ export class ProjectController {
     return this.projectService.getApprovals(id);
   }
 
+  @Get(':id/approval-history')
+  getApprovalHistory(@Param('id') id: string) {
+    return this.projectService.getApprovalHistory(id);
+  }
+
   @Get('member/:id')
   getMemberById(@Param('id') id: string) {
     return this.projectService.getMemberById(id);

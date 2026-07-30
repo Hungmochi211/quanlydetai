@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThanhVienDT } from 'src/entity/pjmem.entity';
 import { DeTai } from 'src/entity/project.entity';
 import { XetDuyetDeTai } from 'src/entity/project-approval.entity';
+import { LichSuXetDuyetDeTai } from 'src/entity/project-approval-history.entity';
 import { NguoiDung } from 'src/entity/user.entity';
 import { TaiLieu } from 'src/entity/document.entity';
 import { AuthModule } from 'src/auth/auth.module';
@@ -17,6 +18,7 @@ import { HoiDong, HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.enti
       ThanhVienDT,
       DeTai,
       XetDuyetDeTai,
+      LichSuXetDuyetDeTai,
       NguoiDung,
       TaiLieu,
       HoiDongDeTai,

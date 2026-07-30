@@ -5,10 +5,12 @@ describe('ProjectService - xét duyệt nhiều hội đồng', () => {
   let service: ProjectService;
   let project: any;
   let approvals: any[];
+  let approvalHistory: any[];
 
   beforeEach(() => {
     project = { MaDT: 'DT01', TrangThai: 'Chờ phê duyệt', NgayXetDuyet: null };
     approvals = [];
+    approvalHistory = [];
     let nextApprovalId = 1;
 
     const projectRepository = {
@@ -19,7 +21,7 @@ describe('ProjectService - xét duyệt nhiều hội đồng', () => {
 
     const memberRepository = {
       findOne: jest.fn(async ({ where }) =>
-        where.TaiKhoan === 'leader'
+        (where.TaiKhoan === 'leader' || where.VaiTroDT === 'Nhóm trưởng')
           ? { MaDT: 'DT01', TaiKhoan: 'leader', VaiTroDT: 'Nhóm trưởng' }
           : null,
       ),
@@ -28,8 +30,10 @@ describe('ProjectService - xét duyệt nhiều hội đồng', () => {
 
     const approvalRepository = {
       create: jest.fn((data) => data),
-      delete: jest.fn(async ({ MaDT }) => {
-        approvals = approvals.filter((approval) => approval.MaDT !== MaDT);
+      delete: jest.fn(async (where) => {
+        approvals = approvals.filter(
+          (approval) => !Object.entries(where).every(([key, value]) => approval[key] === value),
+        );
       }),
       count: jest.fn(async ({ where }) => approvals.filter((approval) => approval.MaDT === where.MaDT).length),
       save: jest.fn(async (entityOrEntities) => {
@@ -58,10 +62,20 @@ describe('ProjectService - xét duyệt nhiều hội đồng', () => {
       ]),
     };
 
+    const approvalHistoryRepository = {
+      create: jest.fn((data) => data),
+      find: jest.fn(async () => approvalHistory),
+      save: jest.fn(async (entities) => {
+        approvalHistory.push(...(Array.isArray(entities) ? entities : [entities]));
+        return entities;
+      }),
+    };
+
     service = new ProjectService(
       projectRepository as any,
       memberRepository as any,
       approvalRepository as any,
+      approvalHistoryRepository as any,
       userRepository as any,
       { delete: jest.fn(async () => ({ affected: 0 })) } as any,
       {
@@ -149,6 +163,39 @@ describe('ProjectService - xét duyệt nhiều hội đồng', () => {
     await expect(service.submitForApproval('DT01', 'leader', { councilType: 'approval' })).rejects.toBeInstanceOf(
       BadRequestException,
     );
+  });
+
+  it('chỉ tạo lại phiếu của thành viên từ chối khi nhóm trưởng gửi lại', async () => {
+    await service.submitForApproval('DT01', 'leader', { councilType: 'approval' });
+    await service.reviewProject('DT01', 'committee-2', { decision: 'approved' });
+    await service.reviewProject('DT01', 'committee-1', {
+      decision: 'rejected',
+      note: 'Bổ sung thuyết minh',
+    });
+
+    await service.submitForApproval('DT01', 'leader', { councilType: 'approval' });
+
+    expect(project.TrangThai).toBe('Chờ phê duyệt');
+    expect(approvalHistory).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        MaDT: 'DT01',
+        LanXetDuyet: 1,
+        TaiKhoanHoiDong: 'committee-1',
+        TrangThai: 'Từ chối',
+        GhiChu: 'Bổ sung thuyết minh',
+      }),
+    ]));
+    expect(approvalHistory).toHaveLength(1);
+    expect(approvals).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        TaiKhoanHoiDong: 'committee-1',
+        TrangThai: 'Chờ phê duyệt',
+      }),
+      expect.objectContaining({
+        TaiKhoanHoiDong: 'committee-2',
+        TrangThai: 'Đã phê duyệt',
+      }),
+    ]));
   });
 
   it('xóa được đề tài Nháp sau khi xóa các thành viên và tài liệu liên quan', async () => {

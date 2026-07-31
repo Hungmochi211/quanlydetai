@@ -30,7 +30,7 @@ export class TaiLieu {
   @Column({ type: 'nvarchar', length: 255 })
   NguoiGui: string;
 
-  @Column({ type: 'varchar', length: 50, nullable: true })
+  @Column({ type: 'nvarchar', length: 255, nullable: true })
   LoaiTaiLieu: string;
 
   @CreateDateColumn({ type: 'datetime' })

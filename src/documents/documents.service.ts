@@ -88,7 +88,7 @@ export class DocumentsService {
       MaHoSoNghiemThu: maHoSoNghiemThu,
       NguoiGui: taiKhoan,
       LoaiTaiLieu: dto.LoaiTaiLieu?.trim(),
-      TenFile: file.originalname,
+      TenFile: this.normalizeUploadedFileName(file.originalname),
       FilePath: file.filename,
     });
 
@@ -332,6 +332,20 @@ export class DocumentsService {
       ? join('uploads', 'documents')
       : join('private-uploads', 'documents');
     return join(process.cwd(), directory, fileName);
+  }
+
+  /**
+   * Multer có thể trả về tên file UTF-8 đã bị đọc nhầm theo Latin-1,
+   * ví dụ "báº£n cam káº¿t" thay vì "bản cam kết".
+   */
+  private normalizeUploadedFileName(fileName: string): string {
+    const hasMojibake = /Ã.|Ä.|Â.|áº|á»|â€/.test(fileName);
+    if (!hasMojibake) {
+      return fileName;
+    }
+
+    const decoded = Buffer.from(fileName, 'latin1').toString('utf8');
+    return decoded.includes('\uFFFD') ? fileName : decoded;
   }
 
   private normalizeRole(role: string): string {

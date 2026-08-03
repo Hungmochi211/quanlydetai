@@ -198,6 +198,34 @@ describe('ProjectService - xét duyệt nhiều hội đồng', () => {
     ]));
   });
 
+  it('gửi lại đúng một phiếu cho thành viên hội đồng đã từ chối', async () => {
+    await service.submitForApproval('DT01', 'leader', { councilType: 'approval' });
+    await service.reviewProject('DT01', 'committee-1', {
+      decision: 'rejected',
+      note: 'Bổ sung mục tiêu',
+    });
+
+    await service.resendApprovalToReviewer(
+      'DT01',
+      'committee-1',
+      'leader',
+      'Đã cập nhật mục tiêu',
+    );
+
+    expect(approvalHistory).toHaveLength(1);
+    expect(approvals).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        TaiKhoanHoiDong: 'committee-1',
+        TrangThai: 'Chờ phê duyệt',
+        GhiChu: 'Đã cập nhật mục tiêu',
+      }),
+      expect.objectContaining({
+        TaiKhoanHoiDong: 'committee-2',
+        TrangThai: 'Chờ phê duyệt',
+      }),
+    ]));
+  });
+
   it('xóa được đề tài Nháp sau khi xóa các thành viên và tài liệu liên quan', async () => {
     project.TrangThai = 'Nháp';
 

@@ -91,12 +91,16 @@ export class ProjectService {
     }
   }
 
-  private async archiveRejectedApprovalRound(maDT: string): Promise<XetDuyetDeTai[]> {
+  private async archiveRejectedApprovalRound(
+    maDT: string,
+    reviewerAccount?: string,
+  ): Promise<XetDuyetDeTai[]> {
     const currentApprovals = await this.approvalRes.find({
       where: { MaDT: maDT, LoaiHoiDong: 'Xét duyệt' },
     });
     const rejectedApprovals = currentApprovals.filter(
-      (approval) => approval.TrangThai === 'Từ chối',
+      (approval) => approval.TrangThai === 'Từ chối'
+        && (!reviewerAccount || approval.TaiKhoanHoiDong === reviewerAccount),
     );
 
     if (rejectedApprovals.length === 0) return [];
@@ -127,6 +131,7 @@ export class ProjectService {
       MaDT: maDT,
       LoaiHoiDong: 'Xét duyệt',
       TrangThai: 'Từ chối',
+      ...(reviewerAccount ? { TaiKhoanHoiDong: reviewerAccount } : {}),
     });
 
     return rejectedApprovals;
@@ -353,6 +358,71 @@ export class ProjectService {
         LoaiHoiDong: approval.LoaiHoiDong,
       }));
     return { ...summary, councilType, reviewers };
+  }
+
+  async resendApprovalToReviewer(
+    maDT: string,
+    reviewerAccount: string,
+    sender: string,
+    note?: string,
+  ) {
+    const project = await this.DTRes.findOne({ where: { MaDT: maDT } });
+    if (!project) throw new NotFoundException('Không tìm thấy đề tài này');
+    await this.ensureProjectLeader(maDT, sender);
+
+    const rejectedApproval = await this.approvalRes.findOne({
+      where: {
+        MaDT: maDT,
+        TaiKhoanHoiDong: reviewerAccount,
+        LoaiHoiDong: 'Xét duyệt',
+        TrangThai: 'Từ chối',
+      },
+    });
+    if (!rejectedApproval) {
+      throw new BadRequestException(
+        'Thành viên hội đồng này không có phiếu xét duyệt bị từ chối để gửi lại',
+      );
+    }
+
+    const archivedApprovals = await this.archiveRejectedApprovalRound(
+      maDT,
+      reviewerAccount,
+    );
+    const archivedApproval = archivedApprovals[0];
+    if (!archivedApproval) {
+      throw new BadRequestException('Không thể lưu lịch sử phiếu xét duyệt bị từ chối');
+    }
+
+    await this.approvalRes.save(
+      this.approvalRes.create({
+        MaDT: maDT,
+        TaiKhoanHoiDong: reviewerAccount,
+        MaHoiDong: archivedApproval.MaHoiDong,
+        LoaiHoiDong: 'Xét duyệt',
+        TrangThai: 'Chờ phê duyệt',
+        GhiChu: note?.trim() || undefined,
+      }),
+    );
+
+    const currentApprovals = await this.approvalRes.find({
+      where: { MaDT: maDT, LoaiHoiDong: 'Xét duyệt' },
+    });
+    project.TrangThai = currentApprovals.some((item) => item.TrangThai === 'Từ chối')
+      ? 'Từ chối'
+      : 'Chờ phê duyệt';
+    await this.DTRes.save(project);
+
+    await this.notificationsService.create(
+      { TaiKhoan: sender },
+      {
+        TkNguoiNhan: reviewerAccount,
+        TieuDe: 'Có đề tài gửi lại chờ xét duyệt',
+        NoiDung: `Đề tài "${project.TenDT}" đã được gửi lại để bạn xét duyệt.${note?.trim() ? ` Ghi chú: ${note.trim()}` : ''}`,
+        NgayTao: new Date(),
+      },
+    );
+
+    return this.getApprovalSummary(maDT);
   }
 
   async reviewProject(maDT: string, reviewerAccount: string, dto: ReviewProjectDto) {

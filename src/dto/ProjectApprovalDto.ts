@@ -18,3 +18,8 @@ export class ReviewProjectDto {
   @ApiProperty({ required: false })
   note?: string;
 }
+
+export class ResendProjectApprovalDto {
+  @ApiProperty({ required: false, description: 'Ghi chú gửi lại cho thành viên hội đồng' })
+  note?: string;
+}

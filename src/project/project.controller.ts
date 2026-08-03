@@ -5,7 +5,7 @@ import { AuthGuard } from 'src/auth/auth.guard';
 import { RegisterTopicDto } from 'src/dto/RegisterTopicDto';
 import { DateDto } from 'src/dto/DateDto';
 import { UpdateProjectDto } from 'src/dto/UpdateProjectDto';
-import { ReviewProjectDto, SubmitProjectForApprovalDto } from 'src/dto/ProjectApprovalDto';
+import { ResendProjectApprovalDto, ReviewProjectDto, SubmitProjectForApprovalDto } from 'src/dto/ProjectApprovalDto';
 
 @Controller('project')
 @ApiTags('project')
@@ -43,6 +43,21 @@ export class ProjectController {
     @Body() dto: SubmitProjectForApprovalDto,
   ) {
     return this.projectService.submitForApproval(id, req.user.TaiKhoan, dto);
+  }
+
+  @Post(':id/approvals/:reviewerAccount/resend')
+  resendApprovalToReviewer(
+    @Param('id') id: string,
+    @Param('reviewerAccount') reviewerAccount: string,
+    @Req() req,
+    @Body() dto: ResendProjectApprovalDto,
+  ) {
+    return this.projectService.resendApprovalToReviewer(
+      id,
+      reviewerAccount,
+      req.user.TaiKhoan,
+      dto.note,
+    );
   }
 
   @Post(':id/review')

@@ -1,7 +1,4 @@
-/*
-  Luồng yêu cầu phân công hội đồng theo từng đề tài.
-  Chạy một lần trên SQL Server trước khi khởi động backend với DB_SYNCHRONIZE=false.
-*/
+
 
 IF OBJECT_ID(N'dbo.YeuCauPhanCongHoiDong', N'U') IS NULL
 BEGIN
@@ -49,46 +46,6 @@ BEGIN
         ON dbo.YeuCauPhanCongHoiDong (MaDT, MaLoaiHoiDong)
         WHERE TrangThai = N'Chờ duyệt';
 END;
-GO
-
-/*
-  Tương thích dữ liệu cũ:
-  Mỗi hội đồng đã gán trong HoiDongDeTai được xem như một yêu cầu đã chấp nhận.
-  Nhờ đó đề tài cũ vẫn hiển thị đúng hội đồng và không bị yêu cầu gán lại.
-*/
-INSERT INTO dbo.YeuCauPhanCongHoiDong (
-    MaDT,
-    MaLoaiHoiDong,
-    MaHoiDong,
-    TaiKhoanNguoiGui,
-    TrangThai,
-    LyDoYeuCau,
-    NgayGui,
-    NgayXuLy
-)
-SELECT
-    assignment.MaDT,
-    assignment.MaLoaiHoiDong,
-    assignment.MaHoiDong,
-    leader.TaiKhoan,
-    N'Đã chấp nhận',
-    N'Dữ liệu phân công hội đồng được chuyển từ hệ thống cũ.',
-    assignment.NgayPhanCong,
-    assignment.NgayPhanCong
-FROM dbo.HoiDongDeTai AS assignment
-CROSS APPLY (
-    SELECT TOP (1) member.TaiKhoan
-    FROM dbo.ThanhVienDT AS member
-    WHERE member.MaDT = assignment.MaDT
-      AND member.VaiTroDT = N'Nhóm trưởng'
-    ORDER BY member.idTV ASC
-) AS leader
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM dbo.YeuCauPhanCongHoiDong AS request
-    WHERE request.MaDT = assignment.MaDT
-      AND request.MaHoiDong = assignment.MaHoiDong
-);
 GO
 
 -- Không còn dùng hội đồng mặc định để tự gán cho mọi đề tài.

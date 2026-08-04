@@ -71,6 +71,21 @@ describe('ProjectService - xét duyệt nhiều hội đồng', () => {
       }),
     };
 
+    const councilAssignments = [
+      {
+        MaDT: 'DT01',
+        MaHoiDong: 8,
+        MaLoaiHoiDong: 2,
+        LoaiHoiDong: { NghiepVu: 'approval' },
+      },
+      {
+        MaDT: 'DT01',
+        MaHoiDong: 10,
+        MaLoaiHoiDong: 4,
+        LoaiHoiDong: { NghiepVu: 'scoring' },
+      },
+    ];
+
     service = new ProjectService(
       projectRepository as any,
       memberRepository as any,
@@ -79,31 +94,12 @@ describe('ProjectService - xét duyệt nhiều hội đồng', () => {
       userRepository as any,
       { delete: jest.fn(async () => ({ affected: 0 })) } as any,
       {
-        findOne: jest.fn(),
-        find: jest.fn(async () => []),
+        findOne: jest.fn(async ({ where }) => councilAssignments.find((item) =>
+          item.MaDT === where.MaDT && item.MaHoiDong === where.MaHoiDong,
+        ) ?? null),
+        find: jest.fn(async ({ where }) => councilAssignments.filter((item) => item.MaDT === where.MaDT)),
         create: jest.fn((data) => data),
         save: jest.fn(async (data) => data),
-      } as any,
-      {
-        find: jest.fn(async () => [{
-          MaHoiDong: 8,
-          MaLoaiHoiDong: 2,
-          LaHoiDongMacDinh: true,
-          LoaiHoiDong: { NghiepVu: 'approval' },
-          ThanhVienHoiDong: [{ TaiKhoan: 'committee-1' }, { TaiKhoan: 'committee-2' }],
-        }, {
-          MaHoiDong: 9,
-          MaLoaiHoiDong: 3,
-          LaHoiDongMacDinh: true,
-          LoaiHoiDong: { NghiepVu: 'monitoring' },
-          ThanhVienHoiDong: [{ TaiKhoan: 'monitor-1' }],
-        }, {
-          MaHoiDong: 10,
-          MaLoaiHoiDong: 4,
-          LaHoiDongMacDinh: true,
-          LoaiHoiDong: { NghiepVu: 'scoring' },
-          ThanhVienHoiDong: [{ TaiKhoan: 'scorer-1' }],
-        }]),
       } as any,
       { find: jest.fn(async ({ where }) => where.MaHoiDong === 10
         ? [{ NguoiDung: { TaiKhoan: 'scorer-1' } }]

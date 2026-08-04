@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from 'src/auth/auth.module';
-import { HoiDong, HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
+import { HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
 import { TaiLieu } from 'src/entity/document.entity';
 import { ThanhVienDT } from 'src/entity/pjmem.entity';
 import { DeTai } from 'src/entity/project.entity';
@@ -18,7 +18,6 @@ import { AcceptanceService } from './acceptance.service';
       DeTai,
       ThanhVienDT,
       TaiLieu,
-      HoiDong,
       HoiDongDeTai,
       ThanhVienHoiDong,
     ]),

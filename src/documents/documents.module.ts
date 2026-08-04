@@ -10,6 +10,7 @@ import { AuthModule } from 'src/auth/auth.module';
 import { BaoCaoTienDo } from 'src/entity/progress-report.entity';
 import { HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
 import { HoSoNghiemThu } from 'src/entity/acceptance.entity';
+import { NguoiDung } from 'src/entity/user.entity';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { HoSoNghiemThu } from 'src/entity/acceptance.entity';
       HoSoNghiemThu,
       HoiDongDeTai,
       ThanhVienHoiDong,
+      NguoiDung,
     ]),
     AuthModule,
   ],

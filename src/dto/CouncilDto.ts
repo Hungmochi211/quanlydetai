@@ -108,3 +108,29 @@ export class AssignCouncilToProjectDto {
   @IsInt()
   MaHoiDong!: number;
 }
+
+export class CreateCouncilAssignmentRequestDto {
+  @ApiProperty({ example: 1, description: 'Loại hội đồng cần được phân công' })
+  @Type(() => Number)
+  @IsInt()
+  MaLoaiHoiDong!: number;
+
+  @ApiProperty({ required: false, example: 'Đề nghị phân công hội đồng xét duyệt đề tài.' })
+  @IsOptional()
+  @IsString()
+  LyDoYeuCau?: string;
+}
+
+export class ApproveCouncilAssignmentRequestDto {
+  @ApiProperty({ example: 2, description: 'Hội đồng đã tạo và có thành viên để gán vào đề tài' })
+  @Type(() => Number)
+  @IsInt()
+  MaHoiDong!: number;
+}
+
+export class RejectCouncilAssignmentRequestDto {
+  @ApiProperty({ example: 'Hồ sơ cần bổ sung minh chứng và mô tả kinh phí.' })
+  @IsString()
+  @IsNotEmpty()
+  LyDoTuChoi!: string;
+}

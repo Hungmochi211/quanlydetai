@@ -1,12 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from 'src/auth/auth.guard';
 import { AdminGuard } from 'src/admin-users/admin.guard';
 import {
   AddCouncilMemberDto,
   AssignCouncilToProjectDto,
+  ApproveCouncilAssignmentRequestDto,
   CreateCouncilTypeDto,
   CreateCouncilDto,
+  RejectCouncilAssignmentRequestDto,
   UpdateCouncilTypeDto,
   UpdateCouncilDto,
 } from 'src/dto/CouncilDto';
@@ -21,6 +23,29 @@ export class CouncilsController {
 
   @Get('types')
   findTypes() { return this.councilsService.findTypes(); }
+
+  @Get('requests')
+  findRequests(@Query('status') status?: string) {
+    return this.councilsService.findRequests(status);
+  }
+
+  @Patch('requests/:id/approve')
+  approveRequest(
+    @Param('id') id: string,
+    @Body() dto: ApproveCouncilAssignmentRequestDto,
+    @Req() req,
+  ) {
+    return this.councilsService.approveAssignmentRequest(Number(id), dto.MaHoiDong, req.user.TaiKhoan);
+  }
+
+  @Patch('requests/:id/reject')
+  rejectRequest(
+    @Param('id') id: string,
+    @Body() dto: RejectCouncilAssignmentRequestDto,
+    @Req() req,
+  ) {
+    return this.councilsService.rejectAssignmentRequest(Number(id), dto, req.user.TaiKhoan);
+  }
 
   @Post('types')
   createType(@Body() dto: CreateCouncilTypeDto) { return this.councilsService.createType(dto); }

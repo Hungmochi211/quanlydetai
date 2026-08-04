@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException,
 import { InjectRepository } from '@nestjs/typeorm';
 import { FinalizeAcceptanceDto, SubmitAcceptanceScoreDto, CreateAcceptanceDossierDto, UpdateAcceptanceDossierDto, } from 'src/dto/AcceptanceDto';
 import { HoSoNghiemThu, PhieuChamNghiemThu, } from 'src/entity/acceptance.entity';
-import { HoiDong, HoiDongDeTai, ThanhVienHoiDong, } from 'src/entity/council.entity';
+import { HoiDongDeTai, ThanhVienHoiDong, } from 'src/entity/council.entity';
 import { TaiLieu } from 'src/entity/document.entity';
 import { ThanhVienDT } from 'src/entity/pjmem.entity';
 import { DeTai } from 'src/entity/project.entity';
@@ -24,8 +24,6 @@ export class AcceptanceService {
     private readonly memberRepo: Repository<ThanhVienDT>,
     @InjectRepository(TaiLieu)
     private readonly documentRepo: Repository<TaiLieu>,
-    @InjectRepository(HoiDong)
-    private readonly councilRepo: Repository<HoiDong>,
     @InjectRepository(HoiDongDeTai)
     private readonly assignmentRepo: Repository<HoiDongDeTai>,
     @InjectRepository(ThanhVienHoiDong)
@@ -107,7 +105,7 @@ export class AcceptanceService {
       );
     }
 
-    const council = await this.getOrAssignScoringCouncil(dossier.MaDT);
+    const council = await this.getAssignedScoringCouncil(dossier.MaDT);
     const members = await this.councilMemberRepo.find({
       where: { MaHoiDong: council.MaHoiDong },
     });
@@ -312,38 +310,14 @@ export class AcceptanceService {
     return [...new Set(members.map((m) => m.TaiKhoan))];
   }
 
-  private async getOrAssignScoringCouncil(maDT: string) {
+  private async getAssignedScoringCouncil(maDT: string) {
     const existing = await this.getScoringAssignments(maDT);
-    if (existing.length) {
-      const council = await this.councilRepo.findOne({
-        where: { MaHoiDong: existing[0].MaHoiDong },
-      });
-      if (council) {
-        return council;
-      }
-    }
-    const councils = await this.councilRepo.find({
-      relations: ['LoaiHoiDong', 'ThanhVienHoiDong'],
-      order: { MaHoiDong: 'ASC' },
-    });
-    const choices = councils.filter(
-      (c) => c.LoaiHoiDong?.NghiepVu === 'scoring' && c.ThanhVienHoiDong.length,
-    );
-    const council = choices.find((c) => c.LaHoiDongMacDinh) || choices[0];
-    if (!council) {
+    if (!existing.length) {
       throw new BadRequestException(
-        'Chưa có hội đồng nghiệm thu có thành viên',
+        'Đề tài chưa được Admin phân công hội đồng nghiệm thu',
       );
     }
-
-    await this.assignmentRepo.save(
-      this.assignmentRepo.create({
-        MaDT: maDT,
-        MaHoiDong: council.MaHoiDong,
-        MaLoaiHoiDong: council.MaLoaiHoiDong,
-      }),
-    );
-    return council;
+    return existing[0];
   }
 
   private async refreshAverage(dossier: HoSoNghiemThu) {

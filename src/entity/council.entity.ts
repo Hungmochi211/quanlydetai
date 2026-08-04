@@ -107,3 +107,63 @@ export class HoiDongDeTai {
   @JoinColumn({ name: 'MaDT' })
   DeTai!: DeTai;
 }
+
+@Entity('YeuCauPhanCongHoiDong')
+export class YeuCauPhanCongHoiDong {
+  @PrimaryGeneratedColumn()
+  Id!: number;
+
+  @Column({ type: 'varchar', length: 50 })
+  MaDT!: string;
+
+  @Column({ type: 'int' })
+  MaLoaiHoiDong!: number;
+
+  @Column({ type: 'int', nullable: true })
+  MaHoiDong?: number;
+
+  @Column({ type: 'varchar', length: 50 })
+  TaiKhoanNguoiGui!: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  TaiKhoanNguoiXuLy?: string;
+
+  // Chờ duyệt | Đã chấp nhận | Từ chối
+  @Column({ type: 'nvarchar', length: 30, default: 'Chờ duyệt' })
+  TrangThai!: string;
+
+  @Column({ type: 'nvarchar', length: 'MAX', nullable: true })
+  LyDoYeuCau?: string;
+
+  @Column({ type: 'nvarchar', length: 'MAX', nullable: true })
+  LyDoTuChoi?: string;
+
+  @Column({ type: 'int', nullable: true })
+  YeuCauGocId?: number;
+
+  @Column({ type: 'datetime', default: () => 'GETDATE()' })
+  NgayGui!: Date;
+
+  @Column({ type: 'datetime', nullable: true })
+  NgayXuLy?: Date;
+
+  @ManyToOne(() => DeTai, { onDelete: 'NO ACTION' })
+  @JoinColumn({ name: 'MaDT' })
+  DeTai!: DeTai;
+
+  @ManyToOne(() => LoaiHoiDong, { onDelete: 'NO ACTION' })
+  @JoinColumn({ name: 'MaLoaiHoiDong' })
+  LoaiHoiDong!: LoaiHoiDong;
+
+  @ManyToOne(() => HoiDong, { onDelete: 'NO ACTION', nullable: true })
+  @JoinColumn({ name: 'MaHoiDong' })
+  HoiDong?: HoiDong;
+
+  @ManyToOne(() => NguoiDung, { onDelete: 'NO ACTION' })
+  @JoinColumn({ name: 'TaiKhoanNguoiGui' })
+  NguoiGui!: NguoiDung;
+
+  @ManyToOne(() => NguoiDung, { onDelete: 'NO ACTION', nullable: true })
+  @JoinColumn({ name: 'TaiKhoanNguoiXuLy' })
+  NguoiXuLy?: NguoiDung;
+}

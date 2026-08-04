@@ -81,10 +81,14 @@ describe('CouncilsService', () => {
     };
     const userRepository = {
       findOne: jest.fn(async ({ where }: any) => users.find((user) => user.TaiKhoan === where.TaiKhoan) ?? null),
+      find: jest.fn(async () => users),
     };
     const projectRepository = {
       findOne: jest.fn(async ({ where }: any) => where.MaDT === 'DT01' ? { MaDT: 'DT01' } : null),
     };
+    const projectMemberRepository = { findOne: jest.fn() };
+    const requestRepository = { find: jest.fn(), findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
+    const notifications = { create: jest.fn() };
 
     service = new CouncilsService(
       councilRepository as any,
@@ -93,6 +97,9 @@ describe('CouncilsService', () => {
       councilTypeRepository as any,
       userRepository as any,
       projectRepository as any,
+      projectMemberRepository as any,
+      requestRepository as any,
+      notifications as any,
     );
   });
 

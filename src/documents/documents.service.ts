@@ -10,6 +10,7 @@ import { XetDuyetDeTai } from 'src/entity/project-approval.entity';
 import { BaoCaoTienDo } from 'src/entity/progress-report.entity';
 import { HoSoNghiemThu } from 'src/entity/acceptance.entity';
 import { HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
+import { NguoiDung } from 'src/entity/user.entity';
 import { Repository } from 'typeorm';
 
 @Injectable()
@@ -32,6 +33,8 @@ export class DocumentsService {
     private readonly councilAssignmentRepository: Repository<HoiDongDeTai>,
     @InjectRepository(ThanhVienHoiDong)
     private readonly councilMemberRepository: Repository<ThanhVienHoiDong>,
+    @InjectRepository(NguoiDung)
+    private readonly userRepository: Repository<NguoiDung>,
   ) { }
 
   async upload(
@@ -197,6 +200,12 @@ export class DocumentsService {
   }
 
   private async ensureCanViewProject(maDT: string, taiKhoan: string): Promise<void> {
+    const user = await this.userRepository.findOne({ where: { TaiKhoan: taiKhoan } });
+    const normalizedRole = this.normalizeRole(user?.VaiTro || '');
+    if (normalizedRole === 'admin' || normalizedRole === 'quan tri') {
+      return;
+    }
+
     const thanhVien = await this.thanhVienRepository.findOne({
       where: { MaDT: maDT, TaiKhoan: taiKhoan },
     });

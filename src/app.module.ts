@@ -32,6 +32,7 @@ import {
   HoiDongDeTai,
   LoaiHoiDong,
   ThanhVienHoiDong,
+  YeuCauPhanCongHoiDong,
 } from './entity/council.entity';
 import { BaoCaoTienDo } from './entity/progress-report.entity';
 import { PhanHoiBaoCaoTienDo } from './entity/progress-report-review.entity';
@@ -83,6 +84,7 @@ import { HoSoNghiemThu, PhieuChamNghiemThu } from './entity/acceptance.entity';
           NhanXetDeTai,
           HoiDong,
           ThanhVienHoiDong,
+          YeuCauPhanCongHoiDong,
           HoiDongDeTai,
           LoaiHoiDong,
           BaoCaoTienDo,

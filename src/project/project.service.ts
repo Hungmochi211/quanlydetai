@@ -13,6 +13,7 @@ import { HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
 import { In, Repository } from 'typeorm';
 import { ReviewProjectDto, SubmitProjectForApprovalDto } from 'src/dto/ProjectApprovalDto';
 import { NotificationsService } from 'src/notifications/notifications.service';
+import { AdminProjectQueryDto } from 'src/dto/AdminProjectQueryDto';
 
 @Injectable()
 export class ProjectService {
@@ -51,6 +52,13 @@ export class ProjectService {
       .toLowerCase()
       .replace(/đ/g, 'd')
       .trim();
+  }
+
+  private async ensureAdmin(taiKhoan: string) {
+    const user = await this.userRes.findOne({ where: { TaiKhoan: taiKhoan } });
+    if (this.normalizeRole(user?.VaiTro) !== 'admin') {
+      throw new ForbiddenException('Chỉ tài khoản Admin được thực hiện thao tác này');
+    }
   }
 
   async ensureProjectLeader(maDT: string, taiKhoan: string) {
@@ -194,6 +202,70 @@ export class ProjectService {
       .getMany();
 
     return result;
+  }
+
+  async getAllForAdmin(taiKhoan: string, query: AdminProjectQueryDto) {
+    await this.ensureAdmin(taiKhoan);
+
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const builder = this.DTRes.createQueryBuilder('project')
+      .leftJoinAndSelect('project.ThanhVienDT', 'member')
+      .leftJoinAndSelect('member.NguoiDung', 'user')
+      .orderBy('project.NgayTao', 'DESC')
+      .addOrderBy('project.MaDT', 'ASC')
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    if (query.keyword?.trim()) {
+      builder.andWhere(
+        '(project.MaDT LIKE :keyword OR project.TenDT LIKE :keyword)',
+        { keyword: `%${query.keyword.trim()}%` },
+      );
+    }
+    if (query.phanLoai?.trim()) {
+      builder.andWhere('project.PhanLoai = :phanLoai', {
+        phanLoai: query.phanLoai.trim(),
+      });
+    }
+    if (query.trangThai?.trim()) {
+      builder.andWhere('project.TrangThai = :trangThai', {
+        trangThai: query.trangThai.trim(),
+      });
+    }
+
+    const [data, total] = await builder.getManyAndCount();
+    const isLeader = (role?: string) => {
+      const normalizedRole = this.normalizeRole(role);
+      return normalizedRole.includes('truong nhom') || normalizedRole.includes('nhom truong');
+    };
+    const leaderAccounts = [...new Set(
+      data
+        .flatMap((project) => project.ThanhVienDT || [])
+        .filter((member) => isLeader(member.VaiTroDT))
+        .map((member) => member.TaiKhoan),
+    )];
+    const leaders = leaderAccounts.length
+      ? await this.userRes.findBy({ TaiKhoan: In(leaderAccounts) })
+      : [];
+    const leaderByAccount = new Map(leaders.map((leader) => [leader.TaiKhoan, leader]));
+
+    const result = data.map((project) => {
+      const leaderMember = project.ThanhVienDT?.find((member) => isLeader(member.VaiTroDT));
+      const leader = leaderMember ? leaderByAccount.get(leaderMember.TaiKhoan) : undefined;
+
+      return {
+        ...project,
+        NhomTruong: leaderMember
+          ? {
+            TaiKhoan: leaderMember.TaiKhoan,
+            TenDayDu: leader?.TenDayDu || leaderMember.TaiKhoan,
+          }
+          : null,
+      };
+    });
+
+    return { data: result, total, page, limit };
   }
 
   async getProjectById(id: string) {

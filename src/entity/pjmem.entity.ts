@@ -1,4 +1,4 @@
-import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, OneToOne, OneToMany, } from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, OneToMany, } from 'typeorm';
 import { DeTai } from './project.entity';
 import { NguoiDung } from './user.entity';
 import { ThanhVienMocDT } from './pgmem.entity';
@@ -21,7 +21,7 @@ export class ThanhVienDT {
   @JoinColumn({ name: 'MaDT' })
   DeTai!: DeTai;
 
-  @OneToOne(() => NguoiDung, (nd) => nd.ThanhVienDT)
+  @ManyToOne(() => NguoiDung, (nd) => nd.ThanhVienDT)
   @JoinColumn({ name: 'TaiKhoan' })
   NguoiDung!: NguoiDung;
 

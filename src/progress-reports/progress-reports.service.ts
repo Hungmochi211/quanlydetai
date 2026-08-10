@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DocumentsService } from 'src/documents/documents.service';
-import { CreateProgressReportDto, ReviewProgressReportDto, UpdateProgressReportDto } from 'src/dto/ProgressReportDto';
+import { CreateProgressReportDto, FinalizeProgressReportDto, ReviewProgressReportDto, UpdateProgressReportDto } from 'src/dto/ProgressReportDto';
 import { HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
 import { TaiLieu } from 'src/entity/document.entity';
 import { ThanhVienDT } from 'src/entity/pjmem.entity';
@@ -13,7 +13,7 @@ import { NotificationsService } from 'src/notifications/notifications.service';
 import { In, Repository } from 'typeorm';
 
 const EDITABLE_STATUSES = ['Nháp', 'Yêu cầu bổ sung'];
-const REPORTABLE_PROJECT_STATUSES = ['Đã phê duyệt', 'Đang thực hiện'];
+const REPORTABLE_PROJECT_STATUSES = ['Đã phê duyệt', 'Bắt đầu', 'Đang thực hiện'];
 const MILESTONE_REPORT_TYPE = 'Theo mốc';
 
 @Injectable()
@@ -96,7 +96,17 @@ export class ProgressReportsService {
       relations: ['LoaiHoiDong', 'HoiDong', 'HoiDong.ThanhVienHoiDong', 'HoiDong.ThanhVienHoiDong.NguoiDung', 'DeTai'],
     });
     const projectAssignments = assignments.filter((assignment) => assignment.DeTai);
-    const uniqueAssignments = [...new Map(projectAssignments.map((assignment) => [assignment.MaDT, assignment])).values()];
+    // Một tài khoản có thể thuộc nhiều hội đồng của cùng một đề tài
+    // (ví dụ: xét duyệt và nghiệm thu). Chỉ gộp bản ghi trùng cùng nghiệp vụ,
+    // không gộp toàn bộ theo MaDT vì sẽ làm mất chức năng của hội đồng khác.
+    const uniqueAssignments = [
+      ...new Map(
+        projectAssignments.map((assignment) => [
+          `${assignment.MaDT}-${assignment.LoaiHoiDong?.NghiepVu || assignment.MaLoaiHoiDong}`,
+          assignment,
+        ]),
+      ).values(),
+    ];
     const uniqueProjects = uniqueAssignments.map((assignment) => assignment.DeTai);
     const leaders = uniqueProjects.length > 0
       ? await this.projectMemberRepository.find({
@@ -111,6 +121,7 @@ export class ProgressReportsService {
       );
       return {
         MaDT: project.MaDT,
+        MaHoiDong: assignment.MaHoiDong,
         TenDT: project.TenDT,
         Khoa: project.Khoa,
         TienDo: Number(project.TienDo || 0),
@@ -118,6 +129,9 @@ export class ProgressReportsService {
         ChuNhiem: leader?.NguoiDung?.TenDayDu || leader?.TaiKhoan || '—',
         TenHoiDong: assignment.HoiDong?.TenHoiDong,
         NghiepVuHoiDong: assignment.LoaiHoiDong?.NghiepVu,
+        VaiTroTrongHoiDong: assignment.HoiDong?.ThanhVienHoiDong.find(
+          (member) => member.TaiKhoan === taiKhoan,
+        )?.ChucDanh || 'Thành viên',
         ThanhVienHoiDong: assignment.HoiDong?.ThanhVienHoiDong.map((member) => ({
           TaiKhoan: member.TaiKhoan,
           TenDayDu: member.NguoiDung?.TenDayDu || member.TaiKhoan,
@@ -179,12 +193,13 @@ export class ProgressReportsService {
       throw new BadRequestException('Đề tài chưa được gán hội đồng theo dõi có thành viên');
     }
 
-    report.TrangThai = 'Đã gửi';
-    report.NgayGui = new Date();
-    report.NhanXetHoiDong = undefined;
-    report.TaiKhoanHoiDong = undefined;
-    report.NgayPhanHoi = undefined;
-    await this.reportRepository.save(report);
+    await this.reportRepository.update(report.Id, {
+      TrangThai: 'Đã gửi',
+      NgayGui: new Date(),
+      NhanXetHoiDong: undefined,
+      TaiKhoanHoiDong: undefined,
+      NgayPhanHoi: undefined,
+    });
 
     await Promise.all(
       reviewers.map((TaiKhoan) =>
@@ -209,33 +224,59 @@ export class ProgressReportsService {
     }
     await this.ensureMonitoringMember(report.MaDT, taiKhoan);
 
-    report.TrangThai = {
-      accepted: 'Đạt',
-      supplement: 'Yêu cầu bổ sung',
-      rejected: 'Không đạt',
-    }[dto.decision];
-    report.NhanXetHoiDong = dto.note.trim();
-    report.TaiKhoanHoiDong = taiKhoan;
-    report.NgayPhanHoi = new Date();
-    await this.reportRepository.save(report);
+    const suggestion = dto.decision
+      ? {
+          accepted: 'Đề xuất đạt',
+          supplement: 'Đề xuất bổ sung',
+          rejected: 'Đề xuất không đạt',
+        }[dto.decision]
+      : 'Nhận xét';
     await this.reportReviewRepository.save(this.reportReviewRepository.create({
       MaBaoCaoTienDo: report.Id,
       TaiKhoanHoiDong: taiKhoan,
-      KetQua: report.TrangThai,
-      NhanXet: report.NhanXetHoiDong,
+      KetQua: suggestion,
+      NhanXet: dto.note.trim(),
     }));
 
-    const title = dto.decision === 'accepted'
-      ? 'Báo cáo tiến độ đã được chấp nhận'
-      : dto.decision === 'supplement'
-        ? 'Báo cáo tiến độ cần bổ sung'
-        : 'Báo cáo tiến độ không đạt';
     await this.notificationsService.create(
       { TaiKhoan: taiKhoan },
       {
         TkNguoiNhan: report.TaiKhoanNguoiGui,
-        TieuDe: title,
-        NoiDung: `Phản hồi cho ${report.KyBaoCao}: ${report.NhanXetHoiDong}`,
+        TieuDe: 'Có nhận xét mới cho báo cáo tiến độ',
+        NoiDung: `Báo cáo ${report.KyBaoCao} có nhận xét mới: ${dto.note.trim()}`,
+        NgayTao: new Date(),
+      },
+    );
+    return this.getReportOrThrow(id);
+  }
+
+  async finalize(id: number, dto: FinalizeProgressReportDto, taiKhoan: string) {
+    const report = await this.getReportOrThrow(id);
+    if (report.TrangThai !== 'Đã gửi') {
+      throw new BadRequestException('Chỉ được chốt báo cáo đang ở trạng thái Đã gửi');
+    }
+
+    await this.ensureMonitoringChairman(report.MaDT, taiKhoan);
+    const status = {
+      accepted: 'Đạt',
+      supplement: 'Yêu cầu bổ sung',
+      adjustment: 'Yêu cầu điều chỉnh',
+      liquidation: 'Đề xuất thanh lý',
+    }[dto.decision];
+
+    await this.reportRepository.update(report.Id, {
+      TrangThai: status,
+      NhanXetHoiDong: dto.note.trim(),
+      TaiKhoanHoiDong: taiKhoan,
+      NgayPhanHoi: new Date(),
+    });
+
+    await this.notificationsService.create(
+      { TaiKhoan: taiKhoan },
+      {
+        TkNguoiNhan: report.TaiKhoanNguoiGui,
+        TieuDe: 'Kết luận báo cáo tiến độ',
+        NoiDung: `Báo cáo ${report.KyBaoCao} được Chủ tịch hội đồng theo dõi kết luận: ${status}. ${dto.note.trim()}`,
         NgayTao: new Date(),
       },
     );
@@ -298,13 +339,24 @@ export class ProgressReportsService {
     }
   }
 
+  private async ensureMonitoringChairman(maDT: string, taiKhoan: string) {
+    const councilIds = (await this.getMonitoringAssignments(maDT))
+      .map((assignment) => assignment.MaHoiDong);
+    const member = councilIds.length
+      ? await this.councilMemberRepository.findOne({
+          where: councilIds.map((MaHoiDong) => ({ MaHoiDong, TaiKhoan: taiKhoan })),
+        })
+      : null;
+
+    if (!member || !this.normalize(member.ChucDanh).includes('chu tich')) {
+      throw new ForbiddenException(
+        'Chỉ Chủ tịch hội đồng theo dõi được chốt kết luận báo cáo',
+      );
+    }
+  }
+
   private async getMonitoringMembers(maDT: string): Promise<string[]> {
-    const assignments = await this.councilAssignmentRepository.find({
-      where: { MaDT: maDT },
-      relations: ['LoaiHoiDong'],
-    });
-    const monitoringCouncilIds = assignments
-      .filter((assignment) => assignment.LoaiHoiDong?.NghiepVu === 'monitoring')
+    const monitoringCouncilIds = (await this.getMonitoringAssignments(maDT))
       .map((assignment) => assignment.MaHoiDong);
     if (monitoringCouncilIds.length === 0) return [];
 
@@ -313,6 +365,16 @@ export class ProgressReportsService {
       .where('member.MaHoiDong IN (:...ids)', { ids: monitoringCouncilIds })
       .getMany();
     return [...new Set(members.map((member) => member.TaiKhoan))];
+  }
+
+  private async getMonitoringAssignments(maDT: string) {
+    const assignments = await this.councilAssignmentRepository.find({
+      where: { MaDT: maDT },
+      relations: ['LoaiHoiDong'],
+    });
+    return assignments.filter(
+      (assignment) => assignment.LoaiHoiDong?.NghiepVu === 'monitoring',
+    );
   }
 
 

@@ -38,7 +38,7 @@ export class BaoCaoTienDo {
   @Column({ type: 'varchar', length: 50 })
   TaiKhoanNguoiGui!: string;
 
-  // Nháp | Đã gửi | Yêu cầu bổ sung | Đạt | Không đạt
+  // Nháp | Đã gửi | Yêu cầu bổ sung | Đạt | Yêu cầu điều chỉnh | Đề xuất thanh lý
   @Column({ type: 'nvarchar', length: 30, default: 'Nháp' })
   TrangThai!: string;
 

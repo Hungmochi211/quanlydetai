@@ -88,6 +88,9 @@ describe('CouncilsService', () => {
     };
     const projectMemberRepository = { findOne: jest.fn() };
     const requestRepository = { find: jest.fn(), findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
+    const acceptanceDossierRepository = { find: jest.fn(), update: jest.fn() };
+    const acceptanceScoreRepository = { find: jest.fn(), delete: jest.fn() };
+    const legacyApprovalRepository = { find: jest.fn() };
     const notifications = { create: jest.fn() };
 
     service = new CouncilsService(
@@ -99,6 +102,9 @@ describe('CouncilsService', () => {
       projectRepository as any,
       projectMemberRepository as any,
       requestRepository as any,
+      acceptanceDossierRepository as any,
+      acceptanceScoreRepository as any,
+      legacyApprovalRepository as any,
       notifications as any,
     );
   });

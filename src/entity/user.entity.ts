@@ -1,4 +1,4 @@
-import { Column, Entity, ManyToMany, OneToOne, PrimaryColumn } from 'typeorm';
+import { Column, Entity, ManyToMany, OneToOne, OneToMany, PrimaryColumn } from 'typeorm';
 import { ThanhVienDT } from './pjmem.entity';
 import { NguoiHD } from './teacher.entity';
 import { ThongBao } from './notification.entity';
@@ -32,8 +32,8 @@ export class NguoiDung {
   @Column({ type: 'datetime', nullable: true })
   ResetTokenExpire!: Date;
 
-  @OneToOne(() => ThanhVienDT, (tv) => tv.NguoiDung)
-  ThanhVienDT!: ThanhVienDT;
+  @OneToMany(() => ThanhVienDT, (tv) => tv.NguoiDung)
+  ThanhVienDT!: ThanhVienDT[];
 
   @OneToOne(() => NguoiHD, (nd) => nd.NguoiDung)
   NguoiHD!: NguoiHD;

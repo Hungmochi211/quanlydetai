@@ -72,11 +72,14 @@ export class AcceptanceService {
     const dossier = await this.getDossier(id);
     await this.ensureLeader(dossier.MaDT, account);
     this.ensureEditable(dossier);
+
     if (dto.GhiChu !== undefined) {
-      dossier.GhiChu = dto.GhiChu.trim() || undefined;
+      await this.dossierRepo.update(id, {
+        GhiChu: dto.GhiChu.trim() || undefined,
+      });
     }
 
-    return this.dossierRepo.save(dossier);
+    return this.getDossier(id);
   }
 
   async remove(id: number, account: string) {
@@ -112,9 +115,10 @@ export class AcceptanceService {
     if (!members.length) {
       throw new BadRequestException('Hội đồng nghiệm thu chưa có thành viên');
     }
-    dossier.TrangThai = 'Đang chấm';
-    dossier.NgayGui = new Date();
-    await this.dossierRepo.save(dossier);
+    await this.dossierRepo.update(id, {
+      TrangThai: 'Đang chấm',
+      NgayGui: new Date(),
+    });
     const project = await this.getProject(dossier.MaDT);
     project.TrangThai = 'Đang nghiệm thu';
     await this.projectRepo.save(project);
@@ -144,18 +148,29 @@ export class AcceptanceService {
     let score = await this.scoreRepo.findOne({
       where: { MaHoSoNghiemThu: id, TaiKhoanHoiDong: account },
     });
+
+    const scoreData = {
+      Diem: dto.Diem,
+      NhanXet: dto.NhanXet.trim(),
+      TrangThai: 'Đã gửi',
+      NgayGui: new Date(),
+    };
+
     if (!score) {
-      score = this.scoreRepo.create({
-        MaHoSoNghiemThu: id,
-        TaiKhoanHoiDong: account,
-      });
+      await this.scoreRepo.save(
+        this.scoreRepo.create({
+          MaHoSoNghiemThu: id,
+          TaiKhoanHoiDong: account,
+          ...scoreData,
+        }),
+      );
+    } else {
+      // Không dùng save(score) ở đây. Entity có cả cột MaHoSoNghiemThu và
+      // quan hệ HoSoNghiemThu dùng chung khóa ngoại; khi quan hệ chưa được
+      // nạp, TypeORM có thể sinh UPDATE gán khóa ngoại thành NULL.
+      await this.scoreRepo.update(score.Id, scoreData);
     }
 
-    score.Diem = dto.Diem;
-    score.NhanXet = dto.NhanXet.trim();
-    score.TrangThai = 'Đã gửi';
-    score.NgayGui = new Date();
-    await this.scoreRepo.save(score);
     await this.refreshAverage(dossier);
     return this.getDossier(id);
   }
@@ -182,19 +197,22 @@ export class AcceptanceService {
     }
 
     await this.refreshAverage(dossier);
-    dossier.DiemCuoiCung = dto.DiemCuoiCung;
-    dossier.ChatLuong = dto.ChatLuong.trim();
-    dossier.KetQuaCuoiCung = dto.KetQua;
-    dossier.NhanXetChuTich = dto.NhanXetChuTich.trim();
-    dossier.TaiKhoanChuTichChot = account;
-    dossier.NgayChot = new Date();
-    dossier.TrangThai =
+    const status =
       dto.KetQua === 'Đạt'
         ? 'Đã chốt'
         : dto.KetQua === 'Không đạt'
           ? 'Không đạt'
           : 'Yêu cầu bổ sung';
-    await this.dossierRepo.save(dossier);
+
+    await this.dossierRepo.update(id, {
+      DiemCuoiCung: dto.DiemCuoiCung,
+      ChatLuong: dto.ChatLuong.trim(),
+      KetQuaCuoiCung: dto.KetQua,
+      NhanXetChuTich: dto.NhanXetChuTich.trim(),
+      TaiKhoanChuTichChot: account,
+      NgayChot: new Date(),
+      TrangThai: status,
+    });
     const project = await this.getProject(dossier.MaDT);
     project.TrangThai =
       dto.KetQua === 'Đạt'
@@ -324,7 +342,7 @@ export class AcceptanceService {
     const scores = await this.scoreRepo.find({
       where: { MaHoSoNghiemThu: dossier.Id, TrangThai: 'Đã gửi' },
     });
-    dossier.DiemTrungBinh = scores.length
+    const average = scores.length
       ? Number(
         (
           scores.reduce((sum, item) => sum + Number(item.Diem), 0) /
@@ -332,7 +350,10 @@ export class AcceptanceService {
         ).toFixed(2),
       )
       : undefined;
-    await this.dossierRepo.save(dossier);
+
+    await this.dossierRepo.update(dossier.Id, {
+      DiemTrungBinh: average,
+    });
   }
 
   private normal(value?: string) {

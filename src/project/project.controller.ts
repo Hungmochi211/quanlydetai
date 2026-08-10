@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Get, UseGuards, Req, Param, Patch, Delete, } from '@nestjs/common';
+import { Body, Controller, Post, Get, UseGuards, Req, Param, Patch, Delete, Query, } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ProjectService } from './project.service';
 import { AuthGuard } from 'src/auth/auth.guard';
@@ -6,6 +6,7 @@ import { RegisterTopicDto } from 'src/dto/RegisterTopicDto';
 import { DateDto } from 'src/dto/DateDto';
 import { UpdateProjectDto } from 'src/dto/UpdateProjectDto';
 import { ResendProjectApprovalDto, ReviewProjectDto, SubmitProjectForApprovalDto } from 'src/dto/ProjectApprovalDto';
+import { AdminProjectQueryDto } from 'src/dto/AdminProjectQueryDto';
 
 @Controller('project')
 @ApiTags('project')
@@ -24,6 +25,11 @@ export class ProjectController {
   @Get('getproject')
   async getProject(@Req() req) {
     return this.projectService.getProject(req.user.TaiKhoan);
+  }
+
+  @Get('admin/all')
+  getAllForAdmin(@Req() req, @Query() query: AdminProjectQueryDto) {
+    return this.projectService.getAllForAdmin(req.user.TaiKhoan, query);
   }
 
   @Get('state/:state')

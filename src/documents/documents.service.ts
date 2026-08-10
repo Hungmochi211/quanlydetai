@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { existsSync, promises as fs } from 'fs';
 import { basename, join } from 'path';
 import { AddTaiLieuDto } from 'src/dto/addTaiLieuDto';
+import { DocumentQueryDto } from 'src/dto/DocumentQueryDto';
 import { TaiLieu } from 'src/entity/document.entity';
 import { ThanhVienDT } from 'src/entity/pjmem.entity';
 import { MocDeTai } from 'src/entity/progress.entity';
@@ -123,12 +124,36 @@ export class DocumentsService {
     return { path: physicalPath, tenFile: taiLieu.TenFile };
   }
 
-  async findByDeTai(maDT: string, taiKhoan: string): Promise<TaiLieu[]> {
+  async findByDeTai(
+    maDT: string,
+    taiKhoan: string,
+    query: DocumentQueryDto = {},
+  ): Promise<TaiLieu[]> {
     await this.ensureCanViewProject(maDT, taiKhoan);
-    return this.taiLieuRepository.find({
-      where: { MaDT: maDT },
-      order: { NgayTaiLen: 'DESC' },
-    });
+    const builder = this.taiLieuRepository
+      .createQueryBuilder('document')
+      .where('document.MaDT = :maDT', { maDT });
+
+    const keyword = query.keyword?.trim();
+    if (keyword) {
+      builder.andWhere(
+        '(LOWER(document.TenFile) LIKE LOWER(:keyword) OR LOWER(document.LoaiTaiLieu) LIKE LOWER(:keyword))',
+        { keyword: `%${keyword}%` },
+      );
+    }
+
+    const source = query.source?.trim();
+    if (source) {
+      if (source === 'Tài liệu đề tài') {
+        builder.andWhere(
+          '(document.LoaiTaiLieu IS NULL OR LTRIM(RTRIM(document.LoaiTaiLieu)) = \'\')',
+        );
+      } else {
+        builder.andWhere('document.LoaiTaiLieu = :source', { source });
+      }
+    }
+
+    return builder.orderBy('document.NgayTaiLen', 'DESC').getMany();
   }
 
   async findByMoc(maMoc: number, taiKhoan: string): Promise<TaiLieu[]> {

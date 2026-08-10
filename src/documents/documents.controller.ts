@@ -1,9 +1,10 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Request, Res, UploadedFile, UseGuards, UseInterceptors, } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Query, Request, Res, UploadedFile, UseGuards, UseInterceptors, } from '@nestjs/common';
 import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from 'src/auth/auth.guard';
 import { AddTaiLieuDto } from 'src/dto/addTaiLieuDto';
+import { DocumentQueryDto } from 'src/dto/DocumentQueryDto';
 import { DocumentsService } from './documents.service';
 import { taiLieuMulterOptions } from './multer.config';
 
@@ -43,9 +44,10 @@ export class DocumentsController {
     @Get('detai/:maDT')
     findByDeTai(
         @Param('maDT') maDT: string,
+        @Query() query: DocumentQueryDto,
         @Request() req: AuthenticatedRequest,
     ) {
-        return this.documentsService.findByDeTai(maDT, this.getTaiKhoan(req));
+        return this.documentsService.findByDeTai(maDT, this.getTaiKhoan(req), query);
     }
 
     @Get('moc/:maMoc')

@@ -3,6 +3,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export const PROGRESS_REPORT_DECISIONS = ['accepted', 'supplement', 'rejected'] as const;
+export const PROGRESS_REPORT_FINAL_DECISIONS = ['accepted', 'supplement', 'adjustment', 'liquidation'] as const;
 export const PROGRESS_REPORT_TYPES = ['Theo mốc', 'Định kỳ', 'Đột xuất'] as const;
 
 export class CreateProgressReportDto {
@@ -74,11 +75,23 @@ export class UpdateProgressReportDto {
 }
 
 export class ReviewProgressReportDto {
-  @ApiProperty({ enum: PROGRESS_REPORT_DECISIONS, example: 'supplement' })
+  @ApiProperty({ required: false, enum: PROGRESS_REPORT_DECISIONS, description: 'Đề xuất cá nhân, không làm thay đổi trạng thái báo cáo' })
+  @IsOptional()
   @IsIn(PROGRESS_REPORT_DECISIONS, { message: 'Quyết định phản hồi không hợp lệ' })
-  decision!: (typeof PROGRESS_REPORT_DECISIONS)[number];
+  decision?: (typeof PROGRESS_REPORT_DECISIONS)[number];
 
   @ApiProperty({ example: 'Vui lòng bổ sung minh chứng khảo sát và kế hoạch tháng tới.' })
+  @IsString()
+  @IsNotEmpty()
+  note!: string;
+}
+
+export class FinalizeProgressReportDto {
+  @ApiProperty({ enum: PROGRESS_REPORT_FINAL_DECISIONS, example: 'supplement' })
+  @IsIn(PROGRESS_REPORT_FINAL_DECISIONS, { message: 'Kết luận báo cáo không hợp lệ' })
+  decision!: (typeof PROGRESS_REPORT_FINAL_DECISIONS)[number];
+
+  @ApiProperty({ example: 'Bổ sung minh chứng khảo sát và gửi lại trước ngày 15/08/2026.' })
   @IsString()
   @IsNotEmpty()
   note!: string;

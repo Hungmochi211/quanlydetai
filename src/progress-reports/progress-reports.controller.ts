@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from 'src/auth/auth.guard';
-import { CreateProgressReportDto, ReviewProgressReportDto, UpdateProgressReportDto } from 'src/dto/ProgressReportDto';
+import { CreateProgressReportDto, FinalizeProgressReportDto, ReviewProgressReportDto, UpdateProgressReportDto } from 'src/dto/ProgressReportDto';
 import { ProgressReportsService } from './progress-reports.service';
 
 interface AuthenticatedRequest {
@@ -63,6 +63,11 @@ export class ProgressReportsController {
   @Post(':id/review')
   review(@Param('id', ParseIntPipe) id: number, @Body() dto: ReviewProgressReportDto, @Request() req: AuthenticatedRequest) {
     return this.progressReportsService.review(id, dto, this.account(req));
+  }
+
+  @Post(':id/finalize')
+  finalize(@Param('id', ParseIntPipe) id: number, @Body() dto: FinalizeProgressReportDto, @Request() req: AuthenticatedRequest) {
+    return this.progressReportsService.finalize(id, dto, this.account(req));
   }
 
   private account(req: AuthenticatedRequest): string {

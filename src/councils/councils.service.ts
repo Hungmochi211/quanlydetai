@@ -3,9 +3,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DeTai } from 'src/entity/project.entity';
 import { NguoiDung } from 'src/entity/user.entity';
 import { HoiDong, HoiDongDeTai, LoaiHoiDong, ThanhVienHoiDong, YeuCauPhanCongHoiDong } from 'src/entity/council.entity';
+import { HoSoNghiemThu, PhieuChamNghiemThu } from 'src/entity/acceptance.entity';
+import { XetDuyetDeTai } from 'src/entity/project-approval.entity';
 import { ThanhVienDT } from 'src/entity/pjmem.entity';
 import { NotificationsService } from 'src/notifications/notifications.service';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import {
   AddCouncilMemberDto,
   AssignCouncilToProjectDto,
@@ -28,6 +30,9 @@ export class CouncilsService {
     @InjectRepository(DeTai) private readonly projectRepository: Repository<DeTai>,
     @InjectRepository(ThanhVienDT) private readonly projectMemberRepository: Repository<ThanhVienDT>,
     @InjectRepository(YeuCauPhanCongHoiDong) private readonly requestRepository: Repository<YeuCauPhanCongHoiDong>,
+    @InjectRepository(HoSoNghiemThu) private readonly acceptanceDossierRepository: Repository<HoSoNghiemThu>,
+    @InjectRepository(PhieuChamNghiemThu) private readonly acceptanceScoreRepository: Repository<PhieuChamNghiemThu>,
+    @InjectRepository(XetDuyetDeTai) private readonly legacyApprovalRepository: Repository<XetDuyetDeTai>,
     private readonly notifications: NotificationsService,
   ) { }
 
@@ -111,9 +116,28 @@ export class CouncilsService {
   }
 
   async removeMember(councilId: number, taiKhoan: string) {
+    const council = await this.findOne(councilId);
+    const member = await this.memberRepository.findOne({
+      where: { MaHoiDong: councilId, TaiKhoan: taiKhoan },
+    });
+    if (!member) {
+      throw new NotFoundException('Không tìm thấy thành viên trong hội đồng');
+    }
+
+    let deletedScores = 0;
+    if (council.LoaiHoiDong.NghiepVu === 'scoring') {
+      deletedScores = await this.removeAcceptanceScores(councilId, taiKhoan);
+    }
+
     const result = await this.memberRepository.delete({ MaHoiDong: councilId, TaiKhoan: taiKhoan });
-    if (!result.affected) throw new NotFoundException('Không tìm thấy thành viên trong hội đồng');
-    return { message: 'Đã xóa thành viên khỏi hội đồng' };
+    if (!result.affected) {
+      throw new NotFoundException('Không tìm thấy thành viên trong hội đồng');
+    }
+
+    return {
+      message: 'Đã xóa thành viên khỏi hội đồng',
+      deletedScores,
+    };
   }
 
   async assignToProject(maDT: string, dto: AssignCouncilToProjectDto) {
@@ -406,6 +430,77 @@ export class CouncilsService {
         NgayTao: new Date(),
       },
     )));
+  }
+
+  private async removeAcceptanceScores(councilId: number, taiKhoan: string) {
+    const assignments = await this.assignmentRepository.find({
+      where: { MaHoiDong: councilId },
+    });
+
+    // Các đề tài cũ có thể chưa được backfill sang HoiDongDeTai.
+    // Khi đó, lịch sử XetDuyetDeTai loại "Chấm điểm" là nguồn để xác định
+    // đề tài mà thành viên này đã được giao chấm.
+    const legacyReviews = await this.legacyApprovalRepository.find({
+      where: { TaiKhoanHoiDong: taiKhoan },
+    });
+    const legacyProjectCodes = legacyReviews
+      .filter((review) => {
+        const isScoring = this.normalize(review.LoaiHoiDong).includes('cham diem');
+        const belongsToCouncil =
+          review.MaHoiDong === councilId || review.MaHoiDong === null || review.MaHoiDong === undefined;
+        return isScoring && belongsToCouncil;
+      })
+      .map((review) => review.MaDT);
+
+    const projectCodes = [
+      ...new Set([
+        ...assignments.map((assignment) => assignment.MaDT),
+        ...legacyProjectCodes,
+      ]),
+    ];
+    if (!projectCodes.length) {
+      return 0;
+    }
+
+    const dossiers = await this.acceptanceDossierRepository.find({
+      where: { MaDT: In(projectCodes) },
+    });
+    const dossierIds = dossiers.map((dossier) => dossier.Id);
+    if (!dossierIds.length) {
+      return 0;
+    }
+
+    const result = await this.acceptanceScoreRepository.delete({
+      MaHoSoNghiemThu: In(dossierIds),
+      TaiKhoanHoiDong: taiKhoan,
+    });
+
+    await Promise.all(
+      dossiers.map(async (dossier) => {
+        const remainingScores = await this.acceptanceScoreRepository.find({
+          where: {
+            MaHoSoNghiemThu: dossier.Id,
+            TrangThai: 'Đã gửi',
+          },
+        });
+        const average = remainingScores.length
+          ? Number(
+            (
+              remainingScores.reduce(
+                (sum, score) => sum + Number(score.Diem),
+                0,
+              ) / remainingScores.length
+            ).toFixed(2),
+          )
+          : undefined;
+
+        await this.acceptanceDossierRepository.update(dossier.Id, {
+          DiemTrungBinh: average,
+        });
+      }),
+    );
+
+    return result.affected ?? 0;
   }
 
   private normalize(value?: string) {

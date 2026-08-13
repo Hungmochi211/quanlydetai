@@ -3,6 +3,7 @@ import { DeTai } from './project.entity';
 import { MocDeTai } from './progress.entity';
 import { BaoCaoTienDo } from './progress-report.entity';
 import { HoSoNghiemThu } from './acceptance.entity';
+import { YeuCauDieuChinhDeTai } from './adjustment-request.entity';
 
 @Entity('TaiLieu')
 export class TaiLieu {
@@ -20,6 +21,9 @@ export class TaiLieu {
 
   @Column({ type: 'int', nullable: true })
   MaHoSoNghiemThu?: number;
+
+  @Column({ type: 'int', nullable: true })
+  MaYeuCauDieuChinh?: number;
 
   @Column({ type: 'nvarchar', length: 255 })
   TenFile: string;
@@ -61,4 +65,11 @@ export class TaiLieu {
   })
   @JoinColumn({ name: 'MaHoSoNghiemThu' })
   HoSoNghiemThu?: HoSoNghiemThu;
+
+  @ManyToOne(() => YeuCauDieuChinhDeTai, (request) => request.TaiLieu, {
+    onDelete: 'NO ACTION',
+    nullable: true,
+  })
+  @JoinColumn({ name: 'MaYeuCauDieuChinh' })
+  YeuCauDieuChinh?: YeuCauDieuChinhDeTai;
 }

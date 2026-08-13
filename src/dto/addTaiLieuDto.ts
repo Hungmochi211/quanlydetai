@@ -25,6 +25,10 @@ export class AddTaiLieuDto {
   @IsOptional()
   MaHoSoNghiemThu?: number;
 
+  @ApiProperty({ required: false, description: 'ID phiếu điều chỉnh đề tài cần đính kèm tài liệu' })
+  @IsOptional()
+  MaYeuCauDieuChinh?: number;
+
   @ApiProperty()
   @IsOptional()
   @IsString()

@@ -12,6 +12,7 @@ import { BaoCaoTienDo } from 'src/entity/progress-report.entity';
 import { HoSoNghiemThu } from 'src/entity/acceptance.entity';
 import { HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
 import { NguoiDung } from 'src/entity/user.entity';
+import { YeuCauDieuChinhDeTai } from 'src/entity/adjustment-request.entity';
 import { Repository } from 'typeorm';
 
 @Injectable()
@@ -36,6 +37,8 @@ export class DocumentsService {
     private readonly councilMemberRepository: Repository<ThanhVienHoiDong>,
     @InjectRepository(NguoiDung)
     private readonly userRepository: Repository<NguoiDung>,
+    @InjectRepository(YeuCauDieuChinhDeTai)
+    private readonly adjustmentRequestRepository: Repository<YeuCauDieuChinhDeTai>,
   ) { }
 
   async upload(
@@ -61,8 +64,13 @@ export class DocumentsService {
       maDT,
       taiKhoan,
     );
+    const maYeuCauDieuChinh = await this.validateAdjustmentRequest(
+      dto.MaYeuCauDieuChinh,
+      maDT,
+      taiKhoan,
+    );
 
-    const attachmentTargets = [maMoc, maBaoCaoTienDo, maHoSoNghiemThu]
+    const attachmentTargets = [maMoc, maBaoCaoTienDo, maHoSoNghiemThu, maYeuCauDieuChinh]
       .filter((value) => value !== undefined);
     if (attachmentTargets.length > 1) {
       throw new BadRequestException(
@@ -90,6 +98,7 @@ export class DocumentsService {
       MaMoc: maMoc,
       MaBaoCaoTienDo: maBaoCaoTienDo,
       MaHoSoNghiemThu: maHoSoNghiemThu,
+      MaYeuCauDieuChinh: maYeuCauDieuChinh,
       NguoiGui: taiKhoan,
       LoaiTaiLieu: dto.LoaiTaiLieu?.trim(),
       TenFile: this.normalizeUploadedFileName(file.originalname),
@@ -357,6 +366,29 @@ export class DocumentsService {
     }
 
     return dossierId;
+  }
+
+  private async validateAdjustmentRequest(
+    rawRequestId: number | string | undefined,
+    maDT: string,
+    taiKhoan: string,
+  ): Promise<number | undefined> {
+    if (rawRequestId === undefined || rawRequestId === null || rawRequestId === '') {
+      return undefined;
+    }
+
+    const requestId = Number(rawRequestId);
+    if (!Number.isInteger(requestId)) {
+      throw new BadRequestException('Mã phiếu điều chỉnh không hợp lệ');
+    }
+    const request = await this.adjustmentRequestRepository.findOne({ where: { Id: requestId } });
+    if (!request || request.MaDT !== maDT) {
+      throw new BadRequestException('Phiếu điều chỉnh không thuộc đề tài này');
+    }
+    if (request.TaiKhoanNguoiGui !== taiKhoan || request.TrangThai !== 'Chờ duyệt') {
+      throw new ForbiddenException('Chỉ được đính kèm tài liệu cho phiếu điều chỉnh đang chờ duyệt của bạn');
+    }
+    return requestId;
   }
 
   private getPhysicalPathForDocument(taiLieu: TaiLieu): string {

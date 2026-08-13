@@ -11,6 +11,7 @@ import { BaoCaoTienDo } from 'src/entity/progress-report.entity';
 import { HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
 import { HoSoNghiemThu } from 'src/entity/acceptance.entity';
 import { NguoiDung } from 'src/entity/user.entity';
+import { YeuCauDieuChinhDeTai } from 'src/entity/adjustment-request.entity';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { NguoiDung } from 'src/entity/user.entity';
       HoiDongDeTai,
       ThanhVienHoiDong,
       NguoiDung,
+      YeuCauDieuChinhDeTai,
     ]),
     AuthModule,
   ],

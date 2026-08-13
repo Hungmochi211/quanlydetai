@@ -39,6 +39,8 @@ import { PhanHoiBaoCaoTienDo } from './entity/progress-report-review.entity';
 import { ProgressReportsModule } from './progress-reports/progress-reports.module';
 import { AcceptanceModule } from './acceptance/acceptance.module';
 import { HoSoNghiemThu, PhieuChamNghiemThu } from './entity/acceptance.entity';
+import { AdjustmentRequestsModule } from './adjustment-requests/adjustment-requests.module';
+import { YeuCauDieuChinhDeTai } from './entity/adjustment-request.entity';
 
 @Module({
   imports: [
@@ -59,6 +61,7 @@ import { HoSoNghiemThu, PhieuChamNghiemThu } from './entity/acceptance.entity';
     CouncilsModule,
     ProgressReportsModule,
     AcceptanceModule,
+    AdjustmentRequestsModule,
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -91,6 +94,7 @@ import { HoSoNghiemThu, PhieuChamNghiemThu } from './entity/acceptance.entity';
           PhanHoiBaoCaoTienDo,
           HoSoNghiemThu,
           PhieuChamNghiemThu,
+          YeuCauDieuChinhDeTai,
         ],
         synchronize: config.get<string>('DB_SYNCHRONIZE') === 'true',
         options: {

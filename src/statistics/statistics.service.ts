@@ -4,10 +4,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
 import { Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableRow, TextRun } from 'docx';
-import { Repository, SelectQueryBuilder } from 'typeorm';
+import { In, Repository, SelectQueryBuilder } from 'typeorm';
 import { StatisticsExportQueryDto, StatisticsQueryDto } from 'src/dto/StatisticsDto';
 import { DeTai } from 'src/entity/project.entity';
 import { ThanhVienDT } from 'src/entity/pjmem.entity';
+import { PhanLoai } from 'src/entity/speclist.entity';
 
 type ReportTopic = Pick<DeTai, 'MaDT' | 'TenDT' | 'Khoa' | 'TrangThai' | 'TienDo' | 'NgayKetThuc'>;
 
@@ -16,6 +17,7 @@ export class StatisticsService {
   constructor(
     @InjectRepository(DeTai) private readonly projectRepository: Repository<DeTai>,
     @InjectRepository(ThanhVienDT) private readonly memberRepository: Repository<ThanhVienDT>,
+    @InjectRepository(PhanLoai) private readonly facultyRepository: Repository<PhanLoai>,
   ) {}
 
   private applyFilters(builder: SelectQueryBuilder<DeTai>, query: StatisticsQueryDto) {
@@ -31,7 +33,18 @@ export class StatisticsService {
     const builder = this.projectRepository.createQueryBuilder('project').select([
       'project.MaDT', 'project.TenDT', 'project.Khoa', 'project.TrangThai', 'project.TienDo', 'project.NgayKetThuc', 'project.NgayTao',
     ]);
-    return this.applyFilters(builder, query).orderBy('project.NgayTao', 'DESC').getMany();
+    const topics = await this.applyFilters(builder, query).orderBy('project.NgayTao', 'DESC').getMany();
+    return this.withFacultyNames(topics);
+  }
+
+  private async withFacultyNames<T extends Pick<DeTai, 'Khoa'>>(topics: T[]): Promise<T[]> {
+    const ids = [...new Set(topics
+      .map((topic) => Number(topic.Khoa))
+      .filter((id) => Number.isInteger(id) && id > 0))];
+    if (!ids.length) return topics;
+    const faculties = await this.facultyRepository.findBy({ idPhanLoai: In(ids) });
+    const names = new Map(faculties.map((faculty): [string, string] => [String(faculty.idPhanLoai), faculty.TenPhanLoai]));
+    return topics.map((topic) => ({ ...topic, Khoa: names.get(String(topic.Khoa)) || topic.Khoa }));
   }
 
   private isCompleted(topic: ReportTopic) {
@@ -89,7 +102,7 @@ export class StatisticsService {
   }
 
   async getMyTopicStatistics(account: string) {
-    const topics = await this.getMyTopics(account);
+    const topics = await this.withFacultyNames(await this.getMyTopics(account));
     const now = new Date();
     const myTopics = topics.map((topic) => {
       const completed = this.isCompleted(topic);
@@ -112,7 +125,7 @@ export class StatisticsService {
   }
 
   async exportMyTopicsReport(account: string, query: StatisticsExportQueryDto) {
-    const report = this.buildReportData(await this.getMyTopics(account));
+    const report = this.buildReportData(await this.withFacultyNames(await this.getMyTopics(account)));
     if (query.format === 'excel') return this.exportExcel(report);
     if (query.format === 'pdf') return this.exportPdf(report);
     return this.exportDocx(report);

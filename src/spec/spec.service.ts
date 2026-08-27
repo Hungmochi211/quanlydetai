@@ -4,6 +4,7 @@ import { ChuyenNganh } from 'src/entity/spec.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { NguoiHD } from 'src/entity/teacher.entity';
+import { NguoiDung } from 'src/entity/user.entity';
 
 @Injectable()
 export class SpecService {
@@ -16,7 +17,19 @@ export class SpecService {
 
     @InjectRepository(NguoiHD)
     private teacherRes: Repository<NguoiHD>,
+
+    @InjectRepository(NguoiDung)
+    private userRes: Repository<NguoiDung>,
   ) {}
+
+  private isLecturer(role?: string) {
+    return (role || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .toLowerCase()
+      .trim() === 'giang vien';
+  }
 
   async findAll() {
     return this.specRes.find();
@@ -35,30 +48,24 @@ export class SpecService {
   }
 
   async getTeacher(teacherkey?: string) {
-    const listTC = await this.teacherRes.find({ relations: ['NguoiDung'] });
-    const filName = teacherkey
-      ? listTC.filter((x) =>
-          x.NguoiDung?.VaiTro === 'Giảng viên' && (x.NguoiDung.TenDayDu + '' + x.HocHamHocVi)
-            .toLowerCase()
-            .includes(teacherkey.toLowerCase()),
-        )
-      : listTC.filter((x) => x.NguoiDung?.VaiTro === 'Giảng viên');
-
-    return filName.map((x) => ({
-      value: x.idNguoiHD,
-      label: `${x.HocHamHocVi}. ${x.NguoiDung.TenDayDu}`,
+    const builder = this.userRes.createQueryBuilder('user')
+      .select(['user.TaiKhoan', 'user.TenDayDu', 'user.VaiTro'])
+      .where('user.VaiTro = :role', { role: 'Giảng viên' })
+      .orderBy('user.TenDayDu', 'ASC')
+      .take(20);
+    if (teacherkey?.trim()) {
+      builder.andWhere('(user.TaiKhoan LIKE :keyword OR user.TenDayDu LIKE :keyword)', {
+        keyword: `%${teacherkey.trim()}%`,
+      });
+    }
+    const lecturers = await builder.getMany();
+    return lecturers.map((user) => ({
+      value: user.TaiKhoan,
+      label: user.TenDayDu ? `GV. ${user.TenDayDu}` : user.TaiKhoan,
     }));
   }
 
   async getTeacherBySpec(id?: string) {
-    const listfind = await this.teacherRes.find({
-      where: { idChuyenNganh: id },
-      relations: ['NguoiDung', 'ChuyenNganh'],
-    });
-
-    return listfind.filter((x) => x.NguoiDung?.VaiTro === 'Giảng viên').map((x) => ({
-      value: x.idNguoiHD,
-      label: `${x.HocHamHocVi}. ${x.NguoiDung.TenDayDu}`,
-    }));
+    return this.getTeacher();
   }
 }

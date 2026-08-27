@@ -162,12 +162,20 @@ export class ProjectService {
       throw new NotFoundException('Đề tài này đã tồn tại!');
     }
 
-    const advisor = await this.advisorRes.findOne({
-      where: { idNguoiHD: prDto.idNguoiHD },
+    let advisor = await this.advisorRes.findOne({
+      where: [{ idNguoiHD: prDto.idNguoiHD }, { TaiKhoan: prDto.idNguoiHD }],
       relations: ['NguoiDung'],
     });
-    if (!advisor || advisor.NguoiDung?.VaiTro !== 'Giảng viên') {
+    const advisorAccount = advisor?.NguoiDung || await this.userRes.findOne({ where: { TaiKhoan: prDto.idNguoiHD } });
+    if (!advisorAccount || this.normalizeRole(advisorAccount.VaiTro) !== 'giang vien') {
       throw new BadRequestException('Người hướng dẫn phải là tài khoản có vai trò Giảng viên');
+    }
+    if (!advisor) {
+      advisor = await this.advisorRes.save(this.advisorRes.create({
+        idNguoiHD: advisorAccount.TaiKhoan,
+        TaiKhoan: advisorAccount.TaiKhoan,
+        idChuyenNganh: prDto.ChuyenNganh,
+      }));
     }
 
     const memberAccounts = [...new Set((prDto.ThanhVienIds || []).filter((account) => account && account !== user.TaiKhoan))];
@@ -192,7 +200,7 @@ export class ProjectService {
       ChuyenNganh: prDto.ChuyenNganh,
       Khoa: String(prDto.Khoa),
       PhanLoai: prDto.PhanLoai,
-      idNguoiHD: prDto.idNguoiHD,
+      idNguoiHD: advisor.idNguoiHD,
       MoTa: prDto.MoTa,
       TrangThai: 'Nháp',
       TienDo: 0,

@@ -19,6 +19,8 @@ import {
   UpdateCouncilDto,
 } from 'src/dto/CouncilDto';
 
+const ELIGIBLE_COUNCIL_ROLES = ['Giảng viên', 'Người hướng dẫn'];
+
 @Injectable()
 export class CouncilsService {
   constructor(
@@ -42,6 +44,21 @@ export class CouncilsService {
       relations: ['LoaiHoiDong', 'ThanhVienHoiDong'],
       order: { MaHoiDong: 'DESC' },
     });
+  }
+
+  async findEligibleMembers(keyword?: string) {
+    const builder = this.userRepository.createQueryBuilder('user')
+      .select(['user.TaiKhoan', 'user.TenDayDu', 'user.VaiTro'])
+      .where('user.VaiTro IN (:...roles)', { roles: ELIGIBLE_COUNCIL_ROLES })
+      .orderBy('user.TenDayDu', 'ASC')
+      .take(20);
+
+    if (keyword?.trim()) {
+      builder.andWhere('(user.TaiKhoan LIKE :keyword OR user.TenDayDu LIKE :keyword)', {
+        keyword: `%${keyword.trim()}%`,
+      });
+    }
+    return builder.getMany();
   }
 
   async findOne(id: number) {
@@ -100,6 +117,9 @@ export class CouncilsService {
     await this.findOne(councilId);
     const user = await this.userRepository.findOne({ where: { TaiKhoan: dto.TaiKhoan } });
     if (!user) throw new NotFoundException('Không tìm thấy tài khoản thành viên');
+    if (!ELIGIBLE_COUNCIL_ROLES.includes(user.VaiTro)) {
+      throw new BadRequestException('Chỉ tài khoản có vai trò Giảng viên hoặc Người hướng dẫn mới được thêm vào hội đồng');
+    }
 
     const existing = await this.memberRepository.findOne({
       where: { MaHoiDong: councilId, TaiKhoan: dto.TaiKhoan },

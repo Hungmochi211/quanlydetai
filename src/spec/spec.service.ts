@@ -38,11 +38,11 @@ export class SpecService {
     const listTC = await this.teacherRes.find({ relations: ['NguoiDung'] });
     const filName = teacherkey
       ? listTC.filter((x) =>
-          (x.NguoiDung.TenDayDu + '' + x.HocHamHocVi)
+          x.NguoiDung?.VaiTro === 'Giảng viên' && (x.NguoiDung.TenDayDu + '' + x.HocHamHocVi)
             .toLowerCase()
             .includes(teacherkey.toLowerCase()),
         )
-      : listTC;
+      : listTC.filter((x) => x.NguoiDung?.VaiTro === 'Giảng viên');
 
     return filName.map((x) => ({
       value: x.idNguoiHD,
@@ -56,7 +56,7 @@ export class SpecService {
       relations: ['NguoiDung', 'ChuyenNganh'],
     });
 
-    return listfind.map((x) => ({
+    return listfind.filter((x) => x.NguoiDung?.VaiTro === 'Giảng viên').map((x) => ({
       value: x.idNguoiHD,
       label: `${x.HocHamHocVi}. ${x.NguoiDung.TenDayDu}`,
     }));

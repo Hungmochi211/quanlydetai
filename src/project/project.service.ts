@@ -14,6 +14,9 @@ import { In, Repository } from 'typeorm';
 import { ReviewProjectDto, SubmitProjectForApprovalDto } from 'src/dto/ProjectApprovalDto';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { AdminProjectQueryDto } from 'src/dto/AdminProjectQueryDto';
+import { ChuyenNganh } from 'src/entity/spec.entity';
+import { PhanLoai } from 'src/entity/speclist.entity';
+import { NguoiHD } from 'src/entity/teacher.entity';
 
 @Injectable()
 export class ProjectService {
@@ -41,6 +44,15 @@ export class ProjectService {
 
     @InjectRepository(ThanhVienHoiDong)
     private councilMemberRes: Repository<ThanhVienHoiDong>,
+
+    @InjectRepository(ChuyenNganh)
+    private specializationRes: Repository<ChuyenNganh>,
+
+    @InjectRepository(PhanLoai)
+    private facultyRes: Repository<PhanLoai>,
+
+    @InjectRepository(NguoiHD)
+    private advisorRes: Repository<NguoiHD>,
 
     private readonly notificationsService: NotificationsService,
   ) { }
@@ -150,6 +162,22 @@ export class ProjectService {
       throw new NotFoundException('Đề tài này đã tồn tại!');
     }
 
+    const advisor = await this.advisorRes.findOne({
+      where: { idNguoiHD: prDto.idNguoiHD },
+      relations: ['NguoiDung'],
+    });
+    if (!advisor || advisor.NguoiDung?.VaiTro !== 'Giảng viên') {
+      throw new BadRequestException('Người hướng dẫn phải là tài khoản có vai trò Giảng viên');
+    }
+
+    const memberAccounts = [...new Set((prDto.ThanhVienIds || []).filter((account) => account && account !== user.TaiKhoan))];
+    if (memberAccounts.length) {
+      const students = await this.userRes.findBy({ TaiKhoan: In(memberAccounts) });
+      if (students.length !== memberAccounts.length || students.some((member) => member.VaiTro !== 'Sinh viên')) {
+        throw new BadRequestException('Thành viên đề tài phải là tài khoản có vai trò Sinh viên');
+      }
+    }
+
     //kiem tra nguoi dang ki
     const isRegister = await this.TVDTRes.findOne({
       where: { TaiKhoan: user.TaiKhoan, MaDT: prDto.MaDT },
@@ -181,8 +209,7 @@ export class ProjectService {
     await this.TVDTRes.save(leader);
 
     //dang ki thanh vien
-    for (const member of prDto.ThanhVienIds) {
-      if (member === user.TaiKhoan) continue;
+    for (const member of memberAccounts) {
       const mb = this.TVDTRes.create({
         MaDT: prDto.MaDT,
         TaiKhoan: member,
@@ -266,6 +293,89 @@ export class ProjectService {
     });
 
     return { data: result, total, page, limit };
+  }
+
+  async lookupProjects(query: AdminProjectQueryDto) {
+    if (!query.keyword?.trim()) {
+      throw new BadRequestException('Vui lòng nhập tên đề tài để tra cứu');
+    }
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const builder = this.DTRes.createQueryBuilder('project')
+      .leftJoinAndSelect('project.NguoiHD', 'advisor')
+      .leftJoinAndSelect('advisor.NguoiDung', 'advisorUser')
+      .leftJoinAndSelect('project.ThanhVienDT', 'member')
+      .leftJoinAndSelect('member.NguoiDung', 'memberUser')
+      .select([
+        'project.MaDT', 'project.TenDT', 'project.ChuyenNganh', 'project.Khoa',
+        'project.PhanLoai', 'project.TrangThai', 'project.TienDo',
+        // SQL Server requires every ORDER BY column to be selected when TypeORM
+        // adds DISTINCT for pagination over the member joins.
+        'project.NgayTao', 'project.NgayBatDau', 'project.NgayKetThuc', 'project.NgayXetDuyet', 'project.MoTa',
+        'advisor.idNguoiHD', 'advisor.TaiKhoan', 'advisorUser.TaiKhoan', 'advisorUser.TenDayDu',
+        'member.idTV', 'member.TaiKhoan', 'member.VaiTroDT', 'memberUser.TaiKhoan', 'memberUser.TenDayDu',
+      ])
+      .orderBy('project.NgayTao', 'DESC')
+      .addOrderBy('project.MaDT', 'ASC')
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    if (query.keyword?.trim()) {
+      builder.andWhere(
+        'project.TenDT LIKE :keyword',
+        { keyword: `%${query.keyword.trim()}%` },
+      );
+    }
+    if (query.trangThai?.trim()) {
+      builder.andWhere('project.TrangThai = :trangThai', { trangThai: query.trangThai.trim() });
+    }
+    if (query.khoa?.trim()) {
+      builder.andWhere('project.Khoa = :khoa', { khoa: query.khoa.trim() });
+    }
+    if (query.namHoc?.trim()) {
+      const startYear = Number(query.namHoc.slice(0, 4));
+      if (Number.isInteger(startYear)) {
+        builder.andWhere('YEAR(project.NgayTao) = :startYear', { startYear });
+      }
+    }
+
+    const [data, total] = await builder.getManyAndCount();
+    const specializationIds = [...new Set(
+      data.map((project) => project.ChuyenNganh).filter((id): id is string => Boolean(id)),
+    )];
+    const facultyIds = [...new Set(
+      data.map((project) => Number(project.Khoa)).filter((id) => Number.isInteger(id) && id > 0),
+    )];
+    const [specializations, faculties] = await Promise.all([
+      specializationIds.length ? this.specializationRes.findBy({ idChuyenNganh: In(specializationIds) }) : [],
+      facultyIds.length ? this.facultyRes.findBy({ idPhanLoai: In(facultyIds) }) : [],
+    ]);
+    const specializationNames = new Map<string, string>(
+      specializations.map((item): [string, string] => [item.idChuyenNganh, item.TenChuyenNganh]),
+    );
+    const facultyNames = new Map<string, string>(
+      faculties.map((item): [string, string] => [String(item.idPhanLoai), item.TenPhanLoai]),
+    );
+    const isLeader = (role?: string) => {
+      const normalizedRole = this.normalizeRole(role);
+      return normalizedRole.includes('truong nhom') || normalizedRole.includes('nhom truong');
+    };
+    return {
+      data: data.map((project) => {
+        const leader = project.ThanhVienDT?.find((member) => isLeader(member.VaiTroDT));
+        return {
+          ...project,
+          TenChuyenNganh: specializationNames.get(project.ChuyenNganh) || project.ChuyenNganh,
+          TenKhoa: facultyNames.get(String(project.Khoa)) || project.Khoa,
+          NhomTruong: leader
+            ? { TaiKhoan: leader.TaiKhoan, TenDayDu: leader.NguoiDung?.TenDayDu || leader.TaiKhoan }
+            : null,
+        };
+      }),
+      total,
+      page,
+      limit,
+    };
   }
 
   async getProjectById(id: string) {

@@ -63,6 +63,11 @@ export class CouncilsController {
     return this.councilsService.findAll(typeId ? Number(typeId) : undefined);
   }
 
+  @Get('eligible-members')
+  findEligibleMembers(@Query('keyword') keyword?: string) {
+    return this.councilsService.findEligibleMembers(keyword);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) { return this.councilsService.findOne(Number(id)); }
 

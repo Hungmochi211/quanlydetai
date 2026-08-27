@@ -11,6 +11,9 @@ import { TaiLieu } from 'src/entity/document.entity';
 import { AuthModule } from 'src/auth/auth.module';
 import { NotificationsModule } from 'src/notifications/notifications.module';
 import { HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
+import { ChuyenNganh } from 'src/entity/spec.entity';
+import { PhanLoai } from 'src/entity/speclist.entity';
+import { NguoiHD } from 'src/entity/teacher.entity';
 
 @Module({
   imports: [
@@ -23,6 +26,9 @@ import { HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
       TaiLieu,
       HoiDongDeTai,
       ThanhVienHoiDong,
+      ChuyenNganh,
+      PhanLoai,
+      NguoiHD,
     ]),
     AuthModule,
     NotificationsModule,

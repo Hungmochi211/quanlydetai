@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Get, UseGuards, Req, Param, Patch, Delete, Query, } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Post, Get, UseGuards, Req, Param, Patch, Delete, Query, } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ProjectService } from './project.service';
 import { AuthGuard } from 'src/auth/auth.guard';
@@ -30,6 +30,14 @@ export class ProjectController {
   @Get('admin/all')
   getAllForAdmin(@Req() req, @Query() query: AdminProjectQueryDto) {
     return this.projectService.getAllForAdmin(req.user.TaiKhoan, query);
+  }
+
+  @Get('lookup')
+  lookup(@Query() query: AdminProjectQueryDto) {
+    if (!query.keyword?.trim()) {
+      throw new BadRequestException('Vui lòng nhập tên đề tài để tra cứu');
+    }
+    return this.projectService.lookupProjects(query);
   }
 
   @Get('state/:state')

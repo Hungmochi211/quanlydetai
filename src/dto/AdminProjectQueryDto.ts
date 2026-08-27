@@ -18,6 +18,16 @@ export class AdminProjectQueryDto {
   @IsString()
   trangThai?: string;
 
+  @ApiProperty({ required: false, example: 'Khoa CNTT' })
+  @IsOptional()
+  @IsString()
+  khoa?: string;
+
+  @ApiProperty({ required: false, example: '2025-2026' })
+  @IsOptional()
+  @IsString()
+  namHoc?: string;
+
   @ApiProperty({ required: false, example: 1, default: 1 })
   @IsOptional()
   @Type(() => Number)

@@ -41,6 +41,7 @@ import { AcceptanceModule } from './acceptance/acceptance.module';
 import { HoSoNghiemThu, PhieuChamNghiemThu } from './entity/acceptance.entity';
 import { AdjustmentRequestsModule } from './adjustment-requests/adjustment-requests.module';
 import { YeuCauDieuChinhDeTai } from './entity/adjustment-request.entity';
+import { StatisticsModule } from './statistics/statistics.module';
 
 @Module({
   imports: [
@@ -62,6 +63,7 @@ import { YeuCauDieuChinhDeTai } from './entity/adjustment-request.entity';
     ProgressReportsModule,
     AcceptanceModule,
     AdjustmentRequestsModule,
+    StatisticsModule,
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({

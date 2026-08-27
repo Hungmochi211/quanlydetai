@@ -26,6 +26,19 @@ export class UserService {
     return userfind;
   }
 
+  async findStudents(keyword?: string) {
+    if (!keyword?.trim()) return [];
+    return this.userRes.createQueryBuilder('user')
+      .select(['user.TaiKhoan', 'user.TenDayDu'])
+      .where('user.VaiTro = :role', { role: 'Sinh viên' })
+      .andWhere('(user.TaiKhoan LIKE :keyword OR user.TenDayDu LIKE :keyword)', {
+        keyword: `%${keyword.trim()}%`,
+      })
+      .orderBy('user.TenDayDu', 'ASC')
+      .take(10)
+      .getMany();
+  }
+
   async findUserByTk(Tk: string) {
     const usercheck = await this.userRes.findOne({
       where: { TaiKhoan: Tk },

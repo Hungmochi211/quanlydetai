@@ -12,6 +12,11 @@ export class UserController {
     return this.userService.checkTaiKhoan(userkey);
   }
 
+  @Get('students')
+  async findStudents(@Query('keyword') keyword?: string) {
+    return this.userService.findStudents(keyword);
+  }
+
   @Get('getuser/:id')
   async findUserByTk(@Param('id') id: string) {
     return this.userService.findUserByTk(id);

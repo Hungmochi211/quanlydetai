@@ -46,4 +46,22 @@ export class StatisticsController {
       .setHeader('Content-Disposition', `attachment; filename="${file.fileName}"`)
       .send(file.buffer);
   }
+
+  @Get('council')
+  councilTopics(@Req() request: { user: { TaiKhoan: string } }) {
+    return this.statisticsService.getCouncilTopicStatistics(request.user.TaiKhoan);
+  }
+
+  @Get('council/export')
+  async exportCouncilTopics(
+    @Req() request: { user: { TaiKhoan: string } },
+    @Query() query: StatisticsExportQueryDto,
+    @Res() response: Response,
+  ) {
+    const file = await this.statisticsService.exportCouncilTopicsReport(request.user.TaiKhoan, query);
+    response
+      .setHeader('Content-Type', file.contentType)
+      .setHeader('Content-Disposition', `attachment; filename="${file.fileName}"`)
+      .send(file.buffer);
+  }
 }

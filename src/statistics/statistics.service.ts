@@ -9,6 +9,7 @@ import { StatisticsExportQueryDto, StatisticsQueryDto } from 'src/dto/Statistics
 import { DeTai } from 'src/entity/project.entity';
 import { ThanhVienDT } from 'src/entity/pjmem.entity';
 import { PhanLoai } from 'src/entity/speclist.entity';
+import { HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
 
 type ReportTopic = Pick<DeTai, 'MaDT' | 'TenDT' | 'Khoa' | 'TrangThai' | 'TienDo' | 'NgayKetThuc'>;
 
@@ -18,6 +19,8 @@ export class StatisticsService {
     @InjectRepository(DeTai) private readonly projectRepository: Repository<DeTai>,
     @InjectRepository(ThanhVienDT) private readonly memberRepository: Repository<ThanhVienDT>,
     @InjectRepository(PhanLoai) private readonly facultyRepository: Repository<PhanLoai>,
+    @InjectRepository(ThanhVienHoiDong) private readonly councilMemberRepository: Repository<ThanhVienHoiDong>,
+    @InjectRepository(HoiDongDeTai) private readonly councilAssignmentRepository: Repository<HoiDongDeTai>,
   ) {}
 
   private applyFilters(builder: SelectQueryBuilder<DeTai>, query: StatisticsQueryDto) {
@@ -173,5 +176,205 @@ export class StatisticsService {
     const table = new Table({ rows: [new TableRow({ children: header.map((value) => new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: value, bold: true })] })] })) }), ...report.topics.map((topic) => new TableRow({ children: [topic.MaDT, topic.TenDT, topic.Khoa || '', topic.TrangThai || '', `${topic.TienDo || 0}%`].map((value) => new TableCell({ children: [new Paragraph(value)] })) }))] });
     const document = new Document({ sections: [{ children: [new Paragraph({ text: 'BÁO CÁO THỐNG KÊ ĐỀ TÀI', heading: HeadingLevel.TITLE }), new Paragraph(`Tổng đề tài: ${report.overview.totalTopics} | Đang thực hiện: ${report.overview.inProgress} | Hoàn thành: ${report.overview.completed} | Trễ hạn: ${report.overview.overdue}`), table] }] });
     return { buffer: Buffer.from(await Packer.toBuffer(document)), contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', fileName: 'bao-cao-thong-ke.docx' };
+  }
+
+  async getCouncilTopicStatistics(account: string) {
+    const councilMembers = await this.councilMemberRepository.find({
+      where: { TaiKhoan: account },
+    });
+    const councilIds = councilMembers.map((m) => m.MaHoiDong);
+    if (!councilIds.length) {
+      return {
+        overview: { totalTopics: 0, pending: 0, approved: 0 },
+        topics: [],
+      };
+    }
+
+    const assignments = await this.councilAssignmentRepository.find({
+      where: { MaHoiDong: In(councilIds) },
+      relations: ['DeTai', 'HoiDong', 'LoaiHoiDong', 'HoiDong.LoaiHoiDong'],
+    });
+
+    const uniqueAssignments = [
+      ...new Map(
+        assignments
+          .filter((a) => a.DeTai)
+          .map((a) => [a.MaDT, a]),
+      ).values(),
+    ];
+
+    const topics = uniqueAssignments.map((assignment) => {
+      const project = assignment.DeTai;
+      const statusNormalized = (project.TrangThai || '').toLowerCase();
+      let status: 'pending' | 'approved' | 'rejected' = 'pending';
+      if (
+        statusNormalized.includes('từ chối') ||
+        statusNormalized.includes('không đạt') ||
+        statusNormalized.includes('hủy')
+      ) {
+        status = 'rejected';
+      } else if (
+        statusNormalized.includes('phê duyệt') ||
+        statusNormalized.includes('hoàn thành') ||
+        statusNormalized.includes('nghiệm thu') ||
+        statusNormalized.includes('đạt')
+      ) {
+        status = 'approved';
+      } else {
+        status = 'pending';
+      }
+
+      const councilTypeName =
+        assignment.LoaiHoiDong?.TenLoaiHoiDong ||
+        assignment.HoiDong?.LoaiHoiDong?.TenLoaiHoiDong ||
+        assignment.HoiDong?.TenHoiDong ||
+        'Hội đồng chuyên môn';
+
+      return {
+        id: project.MaDT,
+        topicName: project.TenDT,
+        status,
+        councilTypeName,
+        submittedDate: (project.NgayTao || assignment.NgayPhanCong || new Date()).toISOString(),
+        processedDate: project.NgayXetDuyet
+          ? new Date(project.NgayXetDuyet).toISOString()
+          : status !== 'pending' && project.NgayKetThuc
+          ? new Date(project.NgayKetThuc).toISOString()
+          : null,
+      };
+    });
+
+    const overview = {
+      totalTopics: topics.length,
+      pending: topics.filter((t) => t.status === 'pending').length,
+      approved: topics.filter((t) => t.status === 'approved').length,
+    };
+
+    return { overview, topics };
+  }
+
+  async exportCouncilTopicsReport(account: string, query: StatisticsExportQueryDto) {
+    const data = await this.getCouncilTopicStatistics(account);
+    if (query.format === 'excel') return this.exportCouncilExcel(data);
+    if (query.format === 'pdf') return this.exportCouncilPdf(data);
+    return this.exportCouncilDocx(data);
+  }
+
+  private async exportCouncilExcel(data: { overview: { totalTopics: number; pending: number; approved: number }; topics: any[] }) {
+    const workbook = new ExcelJS.Workbook();
+    const summary = workbook.addWorksheet('Tổng quan');
+    summary.addRow(['BÁO CÁO THỐNG KÊ ĐỀ TÀI HỘI ĐỒNG']);
+    summary.mergeCells('A1:B1');
+    summary.getCell('A1').font = { bold: true, size: 16 };
+    summary.addRows([
+      ['Tổng đề tài', data.overview.totalTopics],
+      ['Chờ phê duyệt', data.overview.pending],
+      ['Đã phê duyệt', data.overview.approved],
+    ]);
+    summary.columns = [{ width: 24 }, { width: 18 }];
+
+    const list = workbook.addWorksheet('Danh sách đề tài');
+    list.columns = [
+      { header: 'Mã đề tài', key: 'id', width: 18 },
+      { header: 'Tên đề tài', key: 'topicName', width: 45 },
+      { header: 'Loại hội đồng', key: 'councilTypeName', width: 24 },
+      { header: 'Trạng thái', key: 'status', width: 20 },
+      { header: 'Ngày gửi', key: 'submittedDate', width: 16 },
+      { header: 'Ngày xử lý', key: 'processedDate', width: 16 },
+    ];
+    list.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    list.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A6E3C' } };
+
+    const statusMap = { pending: 'Chờ phê duyệt', approved: 'Đã phê duyệt', rejected: 'Từ chối' };
+    data.topics.forEach((t) => {
+      list.addRow({
+        id: t.id,
+        topicName: t.topicName,
+        councilTypeName: t.councilTypeName,
+        status: statusMap[t.status as 'pending' | 'approved' | 'rejected'] || t.status,
+        submittedDate: t.submittedDate ? new Date(t.submittedDate).toLocaleDateString('vi-VN') : '',
+        processedDate: t.processedDate ? new Date(t.processedDate).toLocaleDateString('vi-VN') : '—',
+      });
+    });
+
+    return {
+      buffer: Buffer.from(await workbook.xlsx.writeBuffer()),
+      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      fileName: 'thong-ke-de-tai-hoi-dong.xlsx',
+    };
+  }
+
+  private exportCouncilPdf(data: { overview: { totalTopics: number; pending: number; approved: number }; topics: any[] }) {
+    return new Promise<{ buffer: Buffer; contentType: string; fileName: string }>((resolve) => {
+      const document = new PDFDocument({ margin: 40 });
+      const chunks: Buffer[] = [];
+      document.on('data', (chunk) => chunks.push(chunk));
+      document.on('end', () =>
+        resolve({
+          buffer: Buffer.concat(chunks),
+          contentType: 'application/pdf',
+          fileName: 'thong-ke-de-tai-hoi-dong.pdf',
+        }),
+      );
+      const fontPath = process.env.PDF_FONT_PATH || (process.platform === 'win32' ? 'C:\\Windows\\Fonts\\arial.ttf' : '');
+      if (fontPath && existsSync(fontPath)) document.font(fontPath);
+      document.fontSize(18).text('BÁO CÁO THỐNG KÊ ĐỀ TÀI HỘI ĐỒNG', { align: 'center' }).moveDown();
+      document.fontSize(11).text(
+        `Tổng đề tài: ${data.overview.totalTopics} | Chờ phê duyệt: ${data.overview.pending} | Đã phê duyệt: ${data.overview.approved}`,
+      ).moveDown();
+      const statusMap = { pending: 'Chờ phê duyệt', approved: 'Đã phê duyệt', rejected: 'Từ chối' };
+      data.topics.forEach((t) =>
+        document.text(
+          `${t.id} | ${t.topicName} | ${t.councilTypeName} | ${statusMap[t.status as 'pending' | 'approved' | 'rejected'] || t.status}`,
+        ),
+      );
+      document.end();
+    });
+  }
+
+  private async exportCouncilDocx(data: { overview: { totalTopics: number; pending: number; approved: number }; topics: any[] }) {
+    const statusMap = { pending: 'Chờ phê duyệt', approved: 'Đã phê duyệt', rejected: 'Từ chối' };
+    const header = ['Mã đề tài', 'Tên đề tài', 'Loại hội đồng', 'Trạng thái', 'Ngày gửi'];
+    const table = new Table({
+      rows: [
+        new TableRow({
+          children: header.map(
+            (v) => new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: v, bold: true })] })] }),
+          ),
+        }),
+        ...data.topics.map(
+          (t) =>
+            new TableRow({
+              children: [
+                t.id,
+                t.topicName,
+                t.councilTypeName,
+                statusMap[t.status as 'pending' | 'approved' | 'rejected'] || t.status,
+                t.submittedDate ? new Date(t.submittedDate).toLocaleDateString('vi-VN') : '',
+              ].map((value) => new TableCell({ children: [new Paragraph(value)] })),
+            }),
+        ),
+      ],
+    });
+
+    const document = new Document({
+      sections: [
+        {
+          children: [
+            new Paragraph({ text: 'BÁO CÁO THỐNG KÊ ĐỀ TÀI HỘI ĐỒNG', heading: HeadingLevel.TITLE }),
+            new Paragraph(
+              `Tổng đề tài: ${data.overview.totalTopics} | Chờ phê duyệt: ${data.overview.pending} | Đã phê duyệt: ${data.overview.approved}`,
+            ),
+            table,
+          ],
+        },
+      ],
+    });
+
+    return {
+      buffer: Buffer.from(await Packer.toBuffer(document)),
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      fileName: 'thong-ke-de-tai-hoi-dong.docx',
+    };
   }
 }

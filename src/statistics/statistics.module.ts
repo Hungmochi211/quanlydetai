@@ -5,11 +5,24 @@ import { AuthModule } from 'src/auth/auth.module';
 import { DeTai } from 'src/entity/project.entity';
 import { ThanhVienDT } from 'src/entity/pjmem.entity';
 import { PhanLoai } from 'src/entity/speclist.entity';
+import { HoiDong, HoiDongDeTai, LoaiHoiDong, ThanhVienHoiDong } from 'src/entity/council.entity';
 import { StatisticsController } from './statistics.controller';
 import { StatisticsService } from './statistics.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([DeTai, ThanhVienDT, PhanLoai]), AuthModule, AdminUsersModule],
+  imports: [
+    TypeOrmModule.forFeature([
+      DeTai,
+      ThanhVienDT,
+      PhanLoai,
+      HoiDong,
+      ThanhVienHoiDong,
+      HoiDongDeTai,
+      LoaiHoiDong,
+    ]),
+    AuthModule,
+    AdminUsersModule,
+  ],
   controllers: [StatisticsController],
   providers: [StatisticsService],
 })

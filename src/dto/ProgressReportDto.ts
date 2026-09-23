@@ -4,14 +4,14 @@ import { IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, MaxLength
 
 export const PROGRESS_REPORT_DECISIONS = ['accepted', 'supplement', 'rejected'] as const;
 export const PROGRESS_REPORT_FINAL_DECISIONS = ['accepted', 'supplement', 'adjustment', 'liquidation'] as const;
-export const PROGRESS_REPORT_TYPES = ['Theo mốc', 'Định kỳ', 'Đột xuất'] as const;
+export const PROGRESS_REPORT_TYPES = ['Theo mốc', 'Định kỳ', 'Đột xuất', 'Nghiệm thu từng phần'] as const;
 
 export class CreateProgressReportDto {
   @ApiProperty({ enum: PROGRESS_REPORT_TYPES, example: 'Theo mốc' })
   @IsIn(PROGRESS_REPORT_TYPES)
   LoaiBaoCao!: (typeof PROGRESS_REPORT_TYPES)[number];
 
-  @ApiProperty({ required: false, example: 12, description: 'Bắt buộc khi chọn báo cáo Theo mốc' })
+  @ApiProperty({ required: false, example: 12, description: 'Bắt buộc khi chọn Báo cáo theo mốc hoặc Nghiệm thu từng phần' })
   @IsOptional()
   @Type(() => Number)
   @IsInt()

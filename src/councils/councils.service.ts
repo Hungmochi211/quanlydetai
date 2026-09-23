@@ -5,6 +5,7 @@ import { NguoiDung } from 'src/entity/user.entity';
 import { HoiDong, HoiDongDeTai, LoaiHoiDong, ThanhVienHoiDong, YeuCauPhanCongHoiDong } from 'src/entity/council.entity';
 import { HoSoNghiemThu, PhieuChamNghiemThu } from 'src/entity/acceptance.entity';
 import { XetDuyetDeTai } from 'src/entity/project-approval.entity';
+import { BaoCaoTienDo } from 'src/entity/progress-report.entity';
 import { ThanhVienDT } from 'src/entity/pjmem.entity';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { In, Repository } from 'typeorm';
@@ -35,6 +36,7 @@ export class CouncilsService {
     @InjectRepository(HoSoNghiemThu) private readonly acceptanceDossierRepository: Repository<HoSoNghiemThu>,
     @InjectRepository(PhieuChamNghiemThu) private readonly acceptanceScoreRepository: Repository<PhieuChamNghiemThu>,
     @InjectRepository(XetDuyetDeTai) private readonly legacyApprovalRepository: Repository<XetDuyetDeTai>,
+    @InjectRepository(BaoCaoTienDo) private readonly progressReportRepository: Repository<BaoCaoTienDo>,
     private readonly notifications: NotificationsService,
   ) { }
 
@@ -281,6 +283,31 @@ export class CouncilsService {
       throw new BadRequestException('Hội đồng được chọn không đúng loại theo yêu cầu');
     }
 
+    if (request.MaBaoCaoTienDo) {
+      if (council.LoaiHoiDong.NghiepVu !== 'scoring') {
+        throw new BadRequestException('Hồ sơ nghiệm thu từng phần phải được gán Hội đồng nghiệm thu');
+      }
+      if (council.ThanhVienHoiDong.length === 0) {
+        throw new BadRequestException('Hội đồng phải có ít nhất một thành viên trước khi phân công');
+      }
+      const report = await this.progressReportRepository.findOne({ where: { Id: request.MaBaoCaoTienDo } });
+      if (!report) throw new NotFoundException('Không tìm thấy hồ sơ nghiệm thu từng phần');
+      request.TrangThai = 'Đã chấp nhận';
+      request.MaHoiDong = councilId;
+      request.TaiKhoanNguoiXuLy = adminAccount;
+      request.NgayXuLy = new Date();
+      await this.requestRepository.save(request);
+      await this.progressReportRepository.update(report.Id, {
+        MaHoiDongNghiemThu: councilId,
+        TrangThaiPhanCongHoiDong: 'Đã phân công',
+      });
+      await this.notifications.create(
+        { TaiKhoan: adminAccount },
+        { TkNguoiNhan: request.TaiKhoanNguoiGui, TieuDe: 'Đã phân công Hội đồng nghiệm thu', NoiDung: `Hồ sơ "${report.KyBaoCao}" đã được gán ${council.TenHoiDong}. Bạn có thể gửi hồ sơ nghiệm thu.`, NgayTao: new Date() },
+      );
+      return this.findRequest(id);
+    }
+
     await this.assignToProject(request.MaDT, { MaHoiDong: councilId });
     request.TrangThai = 'Đã chấp nhận';
     request.MaHoiDong = councilId;
@@ -322,6 +349,13 @@ export class CouncilsService {
     request.TaiKhoanNguoiXuLy = adminAccount;
     request.NgayXuLy = new Date();
     await this.requestRepository.save(request);
+
+    if (request.MaBaoCaoTienDo) {
+      await this.progressReportRepository.update(request.MaBaoCaoTienDo, {
+        TrangThaiPhanCongHoiDong: 'Từ chối',
+        MaHoiDongNghiemThu: undefined,
+      });
+    }
 
     const project = await this.getProject(request.MaDT);
     if (request.LoaiHoiDong.NghiepVu === 'approval') {

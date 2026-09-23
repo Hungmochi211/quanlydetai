@@ -45,6 +45,11 @@ export class ProgressReportsController {
     return this.progressReportsService.findOne(id, this.account(req));
   }
 
+  @Post(':id/council-request')
+  requestPartialAcceptanceCouncil(@Param('id', ParseIntPipe) id: number, @Request() req: AuthenticatedRequest) {
+    return this.progressReportsService.requestPartialAcceptanceCouncil(id, this.account(req));
+  }
+
   @Patch(':id')
   update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateProgressReportDto, @Request() req: AuthenticatedRequest) {
     return this.progressReportsService.update(id, dto, this.account(req));

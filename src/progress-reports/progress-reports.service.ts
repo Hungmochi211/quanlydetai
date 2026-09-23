@@ -2,19 +2,21 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { InjectRepository } from '@nestjs/typeorm';
 import { DocumentsService } from 'src/documents/documents.service';
 import { CreateProgressReportDto, FinalizeProgressReportDto, ReviewProgressReportDto, UpdateProgressReportDto } from 'src/dto/ProgressReportDto';
-import { HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
+import { HoiDongDeTai, LoaiHoiDong, ThanhVienHoiDong, YeuCauPhanCongHoiDong } from 'src/entity/council.entity';
 import { TaiLieu } from 'src/entity/document.entity';
 import { ThanhVienDT } from 'src/entity/pjmem.entity';
 import { MocDeTai } from 'src/entity/progress.entity';
 import { BaoCaoTienDo } from 'src/entity/progress-report.entity';
 import { PhanHoiBaoCaoTienDo } from 'src/entity/progress-report-review.entity';
 import { DeTai } from 'src/entity/project.entity';
+import { NguoiDung } from 'src/entity/user.entity';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { In, Repository } from 'typeorm';
 
 const EDITABLE_STATUSES = ['Nháp', 'Yêu cầu bổ sung'];
 const REPORTABLE_PROJECT_STATUSES = ['Đã phê duyệt', 'Bắt đầu', 'Đang thực hiện'];
-const MILESTONE_REPORT_TYPE = 'Theo mốc';
+const MILESTONE_BASED_REPORT_TYPES = ['Theo mốc', 'Nghiệm thu từng phần'];
+const PARTIAL_ACCEPTANCE_TYPE = 'Nghiệm thu từng phần';
 
 @Injectable()
 export class ProgressReportsService {
@@ -35,6 +37,12 @@ export class ProgressReportsService {
     private readonly councilAssignmentRepository: Repository<HoiDongDeTai>,
     @InjectRepository(ThanhVienHoiDong)
     private readonly councilMemberRepository: Repository<ThanhVienHoiDong>,
+    @InjectRepository(LoaiHoiDong)
+    private readonly councilTypeRepository: Repository<LoaiHoiDong>,
+    @InjectRepository(YeuCauPhanCongHoiDong)
+    private readonly councilRequestRepository: Repository<YeuCauPhanCongHoiDong>,
+    @InjectRepository(NguoiDung)
+    private readonly userRepository: Repository<NguoiDung>,
     private readonly documentsService: DocumentsService,
     private readonly notificationsService: NotificationsService,
   ) {}
@@ -45,13 +53,20 @@ export class ProgressReportsService {
     this.ensureProjectCanReport(project);
     let maMoc: number | undefined;
     let kyBaoCao: string;
-    if (dto.LoaiBaoCao === MILESTONE_REPORT_TYPE) {
-      if (!dto.MaMoc) throw new BadRequestException('Báo cáo theo mốc phải chọn mốc tiến độ');
+    if (MILESTONE_BASED_REPORT_TYPES.includes(dto.LoaiBaoCao)) {
+      if (!dto.MaMoc) throw new BadRequestException('Hồ sơ theo mốc phải chọn mốc tiến độ');
       const milestone = await this.getMilestoneOrThrow(dto.MaMoc, project.MaDT);
-      const existingReport = await this.reportRepository.findOne({ where: { MaDT: project.MaDT, MaMoc: milestone.MaMoc } });
-      if (existingReport) throw new BadRequestException('Mốc này đã có hồ sơ báo cáo. Hãy chỉnh sửa hoặc gửi lại hồ sơ hiện có.');
+      if (dto.LoaiBaoCao === PARTIAL_ACCEPTANCE_TYPE && milestone.TrangThai !== 'Hoàn thành') {
+        throw new BadRequestException('Chỉ mốc có trạng thái Hoàn thành mới được tạo hồ sơ nghiệm thu từng phần');
+      }
+      const existingReport = await this.reportRepository.findOne({
+        where: { MaDT: project.MaDT, MaMoc: milestone.MaMoc, LoaiBaoCao: dto.LoaiBaoCao },
+      });
+      if (existingReport) throw new BadRequestException('Mốc này đã có hồ sơ cùng loại. Hãy chỉnh sửa hoặc gửi lại hồ sơ hiện có.');
       maMoc = milestone.MaMoc;
-      kyBaoCao = `Báo cáo mốc: ${milestone.TenMoc}`;
+      kyBaoCao = dto.LoaiBaoCao === PARTIAL_ACCEPTANCE_TYPE
+        ? `Nghiệm thu mốc: ${milestone.TenMoc}`
+        : `Báo cáo mốc: ${milestone.TenMoc}`;
     } else {
       kyBaoCao = dto.KyBaoCao?.trim() || '';
       if (!kyBaoCao) throw new BadRequestException('Báo cáo định kỳ hoặc đột xuất phải nhập kỳ/tiêu đề báo cáo');
@@ -81,13 +96,51 @@ export class ProgressReportsService {
     });
   }
 
+  async requestPartialAcceptanceCouncil(id: number, taiKhoan: string) {
+    const report = await this.getReportOrThrow(id);
+    await this.ensureLeader(report.MaDT, taiKhoan);
+    if (report.LoaiBaoCao !== PARTIAL_ACCEPTANCE_TYPE) {
+      throw new BadRequestException('Chỉ hồ sơ nghiệm thu từng phần mới được yêu cầu phân công hội đồng');
+    }
+    if (!EDITABLE_STATUSES.includes(report.TrangThai)) {
+      throw new BadRequestException('Chỉ hồ sơ Nháp hoặc Yêu cầu bổ sung mới được gửi yêu cầu hội đồng');
+    }
+    if (report.TrangThaiPhanCongHoiDong === 'Đã phân công') {
+      throw new BadRequestException('Hồ sơ đã được phân công Hội đồng nghiệm thu');
+    }
+    const pending = await this.councilRequestRepository.findOne({
+      where: { MaBaoCaoTienDo: report.Id, TrangThai: 'Chờ duyệt' },
+    });
+    if (pending) throw new BadRequestException('Yêu cầu phân công Hội đồng đang chờ Admin xử lý');
+    const councilType = await this.councilTypeRepository.findOne({ where: { NghiepVu: 'scoring' } });
+    if (!councilType) throw new BadRequestException('Chưa có loại Hội đồng nghiệm thu trong hệ thống');
+    const request = await this.councilRequestRepository.save(this.councilRequestRepository.create({
+      MaDT: report.MaDT,
+      MaBaoCaoTienDo: report.Id,
+      MaLoaiHoiDong: councilType.MaLoaiHoiDong,
+      TaiKhoanNguoiGui: taiKhoan,
+      LyDoYeuCau: `Đề nghị phân công Hội đồng nghiệm thu cho ${report.KyBaoCao}.`,
+      TrangThai: 'Chờ duyệt',
+    }));
+    await this.reportRepository.update(report.Id, { TrangThaiPhanCongHoiDong: 'Chờ xử lý', MaHoiDongNghiemThu: undefined });
+    const admins = await this.userRepository.find({ where: { VaiTro: 'Admin' }, select: ['TaiKhoan'] });
+    await Promise.all(admins.map((admin) => this.notificationsService.create(
+      { TaiKhoan: taiKhoan },
+      { TkNguoiNhan: admin.TaiKhoan, TieuDe: 'Có yêu cầu phân công Hội đồng nghiệm thu từng phần', NoiDung: `Đề tài "${report.MaDT}" yêu cầu phân công hội đồng cho ${report.KyBaoCao}.`, NgayTao: new Date() },
+    )));
+    return request;
+  }
+
   async findMonitoringProjects(taiKhoan: string) {
     return (await this.findCouncilProjects(taiKhoan))
       .filter((project) => project.NghiepVuHoiDong === 'monitoring');
   }
 
   async findCouncilProjects(taiKhoan: string) {
-    const councilMembers = await this.councilMemberRepository.find({ where: { TaiKhoan: taiKhoan } });
+    const councilMembers = await this.councilMemberRepository.find({
+      where: { TaiKhoan: taiKhoan },
+      relations: ['HoiDong', 'HoiDong.ThanhVienHoiDong', 'HoiDong.ThanhVienHoiDong.NguoiDung'],
+    });
     const councilIds = councilMembers.map((member) => member.MaHoiDong);
     if (councilIds.length === 0) return [];
 
@@ -107,14 +160,21 @@ export class ProgressReportsService {
         ]),
       ).values(),
     ];
-    const uniqueProjects = uniqueAssignments.map((assignment) => assignment.DeTai);
-    const leaders = uniqueProjects.length > 0
+    const partialReports = await this.reportRepository.find({
+      where: { LoaiBaoCao: PARTIAL_ACCEPTANCE_TYPE, MaHoiDongNghiemThu: In(councilIds) },
+      relations: ['DeTai', 'MocDeTai'],
+    });
+    const allProjects = [
+      ...uniqueAssignments.map((assignment) => assignment.DeTai),
+      ...partialReports.map((report) => report.DeTai),
+    ].filter(Boolean);
+    const leaders = allProjects.length > 0
       ? await this.projectMemberRepository.find({
-          where: { MaDT: In(uniqueProjects.map((project) => project.MaDT)) },
+          where: { MaDT: In([...new Set(allProjects.map((project) => project.MaDT))]) },
           relations: ['NguoiDung'],
         })
       : [];
-    return uniqueAssignments.map((assignment) => {
+    const assignedProjects = uniqueAssignments.map((assignment) => {
       const project = assignment.DeTai;
       const leader = leaders.find(
         (member) => member.MaDT === project.MaDT && this.normalize(member.VaiTroDT).includes('nhom truong'),
@@ -129,6 +189,7 @@ export class ProgressReportsService {
         ChuNhiem: leader?.NguoiDung?.TenDayDu || leader?.TaiKhoan || '—',
         TenHoiDong: assignment.HoiDong?.TenHoiDong,
         NghiepVuHoiDong: assignment.LoaiHoiDong?.NghiepVu,
+        LoaiNghiemThu: assignment.LoaiHoiDong?.NghiepVu === 'scoring' ? 'toan-bo' : undefined,
         VaiTroTrongHoiDong: assignment.HoiDong?.ThanhVienHoiDong.find(
           (member) => member.TaiKhoan === taiKhoan,
         )?.ChucDanh || 'Thành viên',
@@ -139,6 +200,27 @@ export class ProgressReportsService {
         })) || [],
       };
     });
+    const partialAcceptanceProjects = partialReports.map((report) => {
+      const project = report.DeTai;
+      const council = councilMembers.find((member) => member.MaHoiDong === report.MaHoiDongNghiemThu)?.HoiDong;
+      const leader = leaders.find((member) => member.MaDT === project.MaDT && this.normalize(member.VaiTroDT).includes('nhom truong'));
+      return {
+        MaBaoCaoTienDo: report.Id,
+        MaDT: project.MaDT,
+        MaHoiDong: report.MaHoiDongNghiemThu,
+        TenDT: `${project.TenDT} — ${report.MocDeTai?.TenMoc || 'Nghiệm thu từng phần'}`,
+        Khoa: project.Khoa,
+        TienDo: Number(project.TienDo || 0),
+        TrangThai: report.TrangThai,
+        ChuNhiem: leader?.NguoiDung?.TenDayDu || leader?.TaiKhoan || '—',
+        TenHoiDong: council?.TenHoiDong || 'Hội đồng nghiệm thu',
+        NghiepVuHoiDong: 'scoring',
+        LoaiNghiemThu: 'tung-phan',
+        VaiTroTrongHoiDong: councilMembers.find((member) => member.MaHoiDong === report.MaHoiDongNghiemThu)?.ChucDanh || 'Thành viên',
+        ThanhVienHoiDong: council?.ThanhVienHoiDong.map((member) => ({ TaiKhoan: member.TaiKhoan, TenDayDu: member.NguoiDung?.TenDayDu || member.TaiKhoan, ChucDanh: member.ChucDanh })) || [],
+      };
+    });
+    return [...assignedProjects, ...partialAcceptanceProjects];
   }
 
   async getCouncilMembership(taiKhoan: string) {
@@ -188,9 +270,13 @@ export class ProgressReportsService {
     if (documentCount === 0) {
       throw new BadRequestException('Cần đính kèm ít nhất một tài liệu minh chứng trước khi gửi báo cáo');
     }
-    const reviewers = await this.getMonitoringMembers(report.MaDT);
+    const reviewers = report.LoaiBaoCao === PARTIAL_ACCEPTANCE_TYPE
+      ? await this.getPartialAcceptanceMembers(report)
+      : await this.getMonitoringMembers(report.MaDT);
     if (reviewers.length === 0) {
-      throw new BadRequestException('Đề tài chưa được gán hội đồng theo dõi có thành viên');
+      throw new BadRequestException(report.LoaiBaoCao === PARTIAL_ACCEPTANCE_TYPE
+        ? 'Hồ sơ chưa được Admin phân công Hội đồng nghiệm thu'
+        : 'Đề tài chưa được gán hội đồng theo dõi có thành viên');
     }
 
     await this.reportRepository.update(report.Id, {
@@ -207,7 +293,7 @@ export class ProgressReportsService {
           { TaiKhoan: taiKhoan },
           {
             TkNguoiNhan: TaiKhoan,
-            TieuDe: 'Có báo cáo tiến độ cần theo dõi',
+            TieuDe: report.LoaiBaoCao === PARTIAL_ACCEPTANCE_TYPE ? 'Có hồ sơ nghiệm thu từng phần cần xử lý' : 'Có báo cáo tiến độ cần theo dõi',
             NoiDung: `Đề tài "${project.TenDT}" đã gửi ${report.KyBaoCao}.`,
             NgayTao: new Date(),
           },
@@ -222,7 +308,7 @@ export class ProgressReportsService {
     if (report.TrangThai !== 'Đã gửi') {
       throw new BadRequestException('Chỉ phản hồi báo cáo đang ở trạng thái Đã gửi');
     }
-    await this.ensureMonitoringMember(report.MaDT, taiKhoan);
+    await this.ensureReportReviewer(report, taiKhoan);
 
     const suggestion = dto.decision
       ? {
@@ -256,7 +342,7 @@ export class ProgressReportsService {
       throw new BadRequestException('Chỉ được chốt báo cáo đang ở trạng thái Đã gửi');
     }
 
-    await this.ensureMonitoringChairman(report.MaDT, taiKhoan);
+    await this.ensureReportFinalizer(report, taiKhoan);
     const status = {
       accepted: 'Đạt',
       supplement: 'Yêu cầu bổ sung',
@@ -270,6 +356,11 @@ export class ProgressReportsService {
       TaiKhoanHoiDong: taiKhoan,
       NgayPhanHoi: new Date(),
     });
+
+    if (report.LoaiBaoCao === PARTIAL_ACCEPTANCE_TYPE && report.MaMoc && status === 'Đạt') {
+      await this.milestoneRepository.update(report.MaMoc, { TrangThai: 'Đã nghiệm thu' });
+      await this.updateProjectProgressFromAcceptedMilestones(report.MaDT);
+    }
 
     await this.notificationsService.create(
       { TaiKhoan: taiKhoan },
@@ -329,13 +420,46 @@ export class ProgressReportsService {
   private async ensureCanViewProject(maDT: string, taiKhoan: string) {
     const member = await this.projectMemberRepository.findOne({ where: { MaDT: maDT, TaiKhoan: taiKhoan } });
     if (member) return;
-    await this.ensureMonitoringMember(maDT, taiKhoan);
+    if ((await this.getMonitoringMembers(maDT)).includes(taiKhoan)) return;
+    const councilIds = (await this.councilMemberRepository.find({ where: { TaiKhoan: taiKhoan } }))
+      .map((item) => item.MaHoiDong);
+    if (councilIds.length && await this.reportRepository.findOne({
+      where: { MaDT: maDT, LoaiBaoCao: PARTIAL_ACCEPTANCE_TYPE, MaHoiDongNghiemThu: In(councilIds) },
+    })) return;
+    throw new ForbiddenException('Bạn không có quyền xem báo cáo của đề tài này');
   }
 
   private async ensureMonitoringMember(maDT: string, taiKhoan: string) {
     const reviewers = await this.getMonitoringMembers(maDT);
     if (!reviewers.includes(taiKhoan)) {
       throw new ForbiddenException('Bạn không thuộc hội đồng theo dõi của đề tài này');
+    }
+  }
+
+  private async ensureReportReviewer(report: BaoCaoTienDo, taiKhoan: string) {
+    const reviewers = report.LoaiBaoCao === PARTIAL_ACCEPTANCE_TYPE
+      ? await this.getPartialAcceptanceMembers(report)
+      : await this.getMonitoringMembers(report.MaDT);
+    if (!reviewers.includes(taiKhoan)) {
+      throw new ForbiddenException(report.LoaiBaoCao === PARTIAL_ACCEPTANCE_TYPE
+        ? 'Bạn không thuộc Hội đồng nghiệm thu của hồ sơ này'
+        : 'Bạn không thuộc hội đồng theo dõi của đề tài này');
+    }
+  }
+
+  private async ensureReportFinalizer(report: BaoCaoTienDo, taiKhoan: string) {
+    if (report.LoaiBaoCao !== PARTIAL_ACCEPTANCE_TYPE) {
+      return this.ensureMonitoringChairman(report.MaDT, taiKhoan);
+    }
+    if (!report.MaHoiDongNghiemThu) {
+      throw new ForbiddenException('Hồ sơ chưa được phân công Hội đồng nghiệm thu');
+    }
+    const member = await this.councilMemberRepository.findOne({
+      where: { MaHoiDong: report.MaHoiDongNghiemThu, TaiKhoan: taiKhoan },
+    });
+    const position = this.normalize(member?.ChucDanh);
+    if (!member || (!position.includes('chu tich') && !position.includes('thu ky'))) {
+      throw new ForbiddenException('Chỉ Chủ tịch hoặc Thư ký Hội đồng nghiệm thu được chốt kết luận');
     }
   }
 
@@ -367,6 +491,12 @@ export class ProgressReportsService {
     return [...new Set(members.map((member) => member.TaiKhoan))];
   }
 
+  private async getPartialAcceptanceMembers(report: BaoCaoTienDo): Promise<string[]> {
+    if (report.TrangThaiPhanCongHoiDong !== 'Đã phân công' || !report.MaHoiDongNghiemThu) return [];
+    const members = await this.councilMemberRepository.find({ where: { MaHoiDong: report.MaHoiDongNghiemThu } });
+    return members.map((member) => member.TaiKhoan);
+  }
+
   private async getMonitoringAssignments(maDT: string) {
     const assignments = await this.councilAssignmentRepository.find({
       where: { MaDT: maDT },
@@ -375,6 +505,15 @@ export class ProgressReportsService {
     return assignments.filter(
       (assignment) => assignment.LoaiHoiDong?.NghiepVu === 'monitoring',
     );
+  }
+
+  private async updateProjectProgressFromAcceptedMilestones(maDT: string) {
+    const milestones = await this.milestoneRepository.find({ where: { MaDT: maDT } });
+    const progress = milestones.reduce(
+      (sum, milestone) => sum + (milestone.TrangThai === 'Đã nghiệm thu' ? Number(milestone.TrongSo || 0) : 0),
+      0,
+    );
+    await this.projectRepository.update({ MaDT: maDT }, { TienDo: Math.min(100, Math.round(progress * 100) / 100) });
   }
 
 

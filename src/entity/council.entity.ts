@@ -116,6 +116,10 @@ export class YeuCauPhanCongHoiDong {
   @Column({ type: 'varchar', length: 50 })
   MaDT!: string;
 
+  // Có giá trị khi đây là yêu cầu phân công hội đồng cho một hồ sơ nghiệm thu mốc.
+  @Column({ type: 'int', nullable: true })
+  MaBaoCaoTienDo?: number;
+
   @Column({ type: 'int' })
   MaLoaiHoiDong!: number;
 

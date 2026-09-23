@@ -9,6 +9,7 @@ import { DeTai } from 'src/entity/project.entity';
 import { NguoiDung } from 'src/entity/user.entity';
 import { HoSoNghiemThu, PhieuChamNghiemThu } from 'src/entity/acceptance.entity';
 import { XetDuyetDeTai } from 'src/entity/project-approval.entity';
+import { BaoCaoTienDo } from 'src/entity/progress-report.entity';
 import { CouncilsController } from './councils.controller';
 import { CouncilRequestsController } from './council-requests.controller';
 import { CouncilsService } from './councils.service';
@@ -27,6 +28,7 @@ import { CouncilsService } from './councils.service';
       HoSoNghiemThu,
       PhieuChamNghiemThu,
       XetDuyetDeTai,
+      BaoCaoTienDo,
     ]),
     AuthModule,
     AdminUsersModule,

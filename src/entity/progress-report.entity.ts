@@ -42,6 +42,13 @@ export class BaoCaoTienDo {
   @Column({ type: 'nvarchar', length: 30, default: 'Nháp' })
   TrangThai!: string;
 
+  @Column({ type: 'int', nullable: true })
+  MaHoiDongNghiemThu?: number;
+
+  // Chưa yêu cầu | Chờ xử lý | Đã phân công | Từ chối
+  @Column({ type: 'nvarchar', length: 30, nullable: true })
+  TrangThaiPhanCongHoiDong?: string;
+
   @Column({ type: 'nvarchar', length: 'MAX', nullable: true })
   NhanXetHoiDong?: string;
 

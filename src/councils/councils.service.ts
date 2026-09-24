@@ -44,7 +44,7 @@ export class CouncilsService {
     return this.councilRepository.find({
       where: typeId ? { MaLoaiHoiDong: typeId } : {},
       relations: ['LoaiHoiDong', 'ThanhVienHoiDong'],
-      order: { MaHoiDong: 'DESC' },
+      order: { MaHoiDong: 'ASC' },
     });
   }
 
@@ -391,7 +391,7 @@ export class CouncilsService {
   }
 
   findTypes() {
-    return this.councilTypeRepository.find({ order: { TenLoaiHoiDong: 'ASC' } });
+    return this.councilTypeRepository.find({ order: { MaLoaiHoiDong: 'ASC' } });
   }
 
   async createType(dto: CreateCouncilTypeDto) {

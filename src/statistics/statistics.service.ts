@@ -135,7 +135,9 @@ export class StatisticsService {
       const milestones = (milestonesByTopic.get(topic.MaDT) || []).map((milestone) => ({
         name: milestone.TenMoc,
         status: getMilestoneStatus(milestone),
+        startDate: new Date(milestone.NgayBatDau).toISOString(),
         deadline: new Date(milestone.NgayKetThuc).toISOString(),
+        note: milestone.GhiChu || milestone.MoTa || '',
       }));
       const nextMilestone = (milestonesByTopic.get(topic.MaDT) || []).find(
         (milestone) => getMilestoneStatus(milestone) !== 'completed',
@@ -167,10 +169,113 @@ export class StatisticsService {
   }
 
   async exportMyTopicsReport(account: string, query: StatisticsExportQueryDto) {
+    if (query.format === 'excel') return this.exportMyTopicsExcel(await this.getMyTopicStatistics(account));
     const report = this.buildReportData(await this.withFacultyNames(await this.getMyTopics(account)));
-    if (query.format === 'excel') return this.exportExcel(report);
     if (query.format === 'pdf') return this.exportPdf(report);
     return this.exportDocx(report);
+  }
+
+  private async exportMyTopicsExcel(data: Awaited<ReturnType<StatisticsService['getMyTopicStatistics']>>) {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Hệ thống quản lý đề tài khoa học';
+    workbook.created = new Date();
+
+    const formatDate = (value?: string | Date | null) =>
+      value ? new Date(value).toLocaleDateString('vi-VN') : '';
+    const milestoneStatus: Record<string, string> = {
+      completed: 'Hoàn thành',
+      in_progress: 'Đang thực hiện',
+      upcoming: 'Chưa tới hạn',
+      not_started: 'Chưa bắt đầu',
+    };
+    const topicStatus: Record<string, string> = {
+      in_progress: 'Đang thực hiện',
+      completed: 'Hoàn thành',
+      overdue: 'Trễ hạn',
+    };
+    const deadlineLabel = (deadline?: string) => {
+      if (!deadline) return '';
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const dueDate = new Date(deadline);
+      dueDate.setHours(0, 0, 0, 0);
+      const days = Math.ceil((dueDate.getTime() - today.getTime()) / 86_400_000);
+      if (days < 0) return `Quá hạn ${Math.abs(days)} ngày`;
+      if (days === 0) return 'Đến hạn hôm nay';
+      return `Còn ${days} ngày`;
+    };
+    const styleHeader = (sheet: ExcelJS.Worksheet) => {
+      sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A6E3C' } };
+      sheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+      sheet.getRow(1).height = 24;
+      sheet.views = [{ state: 'frozen', ySplit: 1 }];
+      sheet.autoFilter = { from: 'A1', to: `${String.fromCharCode(64 + sheet.columnCount)}1` };
+    };
+
+    const summary = workbook.addWorksheet('Danh sách đề tài');
+    summary.columns = [
+      { header: 'STT', key: 'index', width: 8 },
+      { header: 'Tên đề tài', key: 'topicName', width: 48 },
+      { header: 'Trạng thái', key: 'topicStatus', width: 20 },
+      { header: 'Mốc hoàn thành', key: 'completedMilestones', width: 17 },
+      { header: 'Tổng mốc', key: 'totalMilestones', width: 12 },
+      { header: 'Tiến độ mốc', key: 'milestoneProgress', width: 18 },
+      { header: 'Mốc cần xử lý', key: 'actionMilestone', width: 38 },
+      { header: 'Hạn mốc', key: 'deadline', width: 15 },
+      { header: 'Tình trạng hạn', key: 'deadlineStatus', width: 20 },
+    ];
+    data.myTopics.forEach((topic, index) => {
+      const completedMilestones = topic.milestones.filter((milestone) => milestone.status === 'completed').length;
+      const actionMilestone = topic.milestones.find((milestone) => milestone.status !== 'completed');
+      summary.addRow({
+        index: index + 1,
+        topicName: topic.topicName,
+        topicStatus: topicStatus[topic.status] || topic.status,
+        completedMilestones,
+        totalMilestones: topic.milestones.length,
+        milestoneProgress: `${completedMilestones}/${topic.milestones.length} mốc hoàn thành`,
+        actionMilestone: actionMilestone?.name || 'Đã hoàn thành các mốc',
+        deadline: formatDate(actionMilestone?.deadline),
+        deadlineStatus: deadlineLabel(actionMilestone?.deadline),
+      });
+    });
+    styleHeader(summary);
+
+    const details = workbook.addWorksheet('Chi tiết mốc');
+    details.columns = [
+      { header: 'STT', key: 'index', width: 8 },
+      { header: 'Tên đề tài', key: 'topicName', width: 48 },
+      { header: 'Tên mốc', key: 'milestoneName', width: 38 },
+      { header: 'Ngày bắt đầu', key: 'startDate', width: 15 },
+      { header: 'Hạn chót', key: 'deadline', width: 15 },
+      { header: 'Trạng thái', key: 'status', width: 20 },
+      { header: 'Tình trạng hạn', key: 'deadlineStatus', width: 20 },
+      { header: 'Ghi chú', key: 'note', width: 45 },
+    ];
+    let milestoneIndex = 0;
+    data.myTopics.forEach((topic) => {
+      topic.milestones.forEach((milestone) => {
+        milestoneIndex += 1;
+        details.addRow({
+          index: milestoneIndex,
+          topicName: topic.topicName,
+          milestoneName: milestone.name,
+          startDate: formatDate(milestone.startDate),
+          deadline: formatDate(milestone.deadline),
+          status: milestoneStatus[milestone.status] || milestone.status,
+          deadlineStatus: milestone.status === 'completed' ? 'Đã hoàn thành' : deadlineLabel(milestone.deadline),
+          note: milestone.note,
+        });
+      });
+    });
+    styleHeader(details);
+
+    return {
+      buffer: Buffer.from(await workbook.xlsx.writeBuffer()),
+      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      fileName: 'de-tai-cua-toi.xlsx',
+    };
   }
 
   async exportReport(query: StatisticsExportQueryDto) {

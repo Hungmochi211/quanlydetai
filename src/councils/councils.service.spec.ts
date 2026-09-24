@@ -13,7 +13,7 @@ describe('CouncilsService', () => {
     councils = [{ MaHoiDong: 1, TenHoiDong: 'Hội đồng xét duyệt CNTT', MaLoaiHoiDong: 1 }];
     members = [];
     assignments = [];
-    const users = [{ TaiKhoan: 'lecturer01', TenDayDu: 'Giảng viên A' }];
+    const users = [{ TaiKhoan: 'lecturer01', TenDayDu: 'Giảng viên A', VaiTro: 'Giảng viên' }];
 
     const councilRepository = {
       findOne: jest.fn(async ({ where }: any) => {
@@ -91,6 +91,7 @@ describe('CouncilsService', () => {
     const acceptanceDossierRepository = { find: jest.fn(), update: jest.fn() };
     const acceptanceScoreRepository = { find: jest.fn(), delete: jest.fn() };
     const legacyApprovalRepository = { find: jest.fn() };
+    const progressReportRepository = { find: jest.fn(), update: jest.fn() };
     const notifications = { create: jest.fn() };
 
     service = new CouncilsService(
@@ -105,6 +106,7 @@ describe('CouncilsService', () => {
       acceptanceDossierRepository as any,
       acceptanceScoreRepository as any,
       legacyApprovalRepository as any,
+      progressReportRepository as any,
       notifications as any,
     );
   });
@@ -113,8 +115,15 @@ describe('CouncilsService', () => {
     const result = await service.create({
       TenHoiDong: '  Hội đồng nghiệm thu CNTT  ',
       MaLoaiHoiDong: 1,
+      HinhThucHop: 'offline',
+      DiaDiem: 'Phòng họp A2',
     });
-    expect(result).toMatchObject({ TenHoiDong: 'Hội đồng nghiệm thu CNTT', MaLoaiHoiDong: 1 });
+    expect(result).toMatchObject({
+      TenHoiDong: 'Hội đồng nghiệm thu CNTT',
+      MaLoaiHoiDong: 1,
+      HinhThucHop: 'offline',
+      DiaDiem: 'Phòng họp A2',
+    });
   });
 
   it('không cho thêm trùng một người vào cùng hội đồng', async () => {

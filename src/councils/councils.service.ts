@@ -80,19 +80,30 @@ export class CouncilsService {
 
   async create(dto: CreateCouncilDto) {
     await this.findType(dto.MaLoaiHoiDong);
+    this.validateMeetingDetails(dto.HinhThucHop, dto.DiaDiem, dto.LinkHop);
     const council = this.councilRepository.create({
       TenHoiDong: dto.TenHoiDong.trim(),
       MaLoaiHoiDong: dto.MaLoaiHoiDong,
       MoTa: dto.MoTa?.trim() || undefined,
       LaHoiDongMacDinh: dto.LaHoiDongMacDinh ?? false,
+      ThoiGianHop: dto.ThoiGianHop ? new Date(dto.ThoiGianHop) : undefined,
+      HinhThucHop: dto.HinhThucHop,
+      DiaDiem: dto.HinhThucHop === 'offline' ? dto.DiaDiem?.trim() || undefined : undefined,
+      LinkHop: dto.HinhThucHop === 'online' ? dto.LinkHop?.trim() || undefined : undefined,
     });
     const saved = await this.councilRepository.save(council);
     return this.findOne(saved.MaHoiDong);
   }
 
   async update(id: number, dto: UpdateCouncilDto) {
-    await this.findOne(id);
+    const currentCouncil = await this.findOne(id);
     if (dto.MaLoaiHoiDong !== undefined) await this.findType(dto.MaLoaiHoiDong);
+    const meetingType = dto.HinhThucHop ?? currentCouncil.HinhThucHop;
+    const location = dto.DiaDiem ?? currentCouncil.DiaDiem;
+    const meetingLink = dto.LinkHop ?? currentCouncil.LinkHop;
+    if (meetingType) {
+      this.validateMeetingDetails(meetingType, location, meetingLink);
+    }
     await this.councilRepository.update(
       { MaHoiDong: id },
       {
@@ -100,6 +111,10 @@ export class CouncilsService {
         ...(dto.MaLoaiHoiDong !== undefined ? { MaLoaiHoiDong: dto.MaLoaiHoiDong } : {}),
         ...(dto.MoTa !== undefined ? { MoTa: dto.MoTa.trim() || null } : {}),
         ...(dto.LaHoiDongMacDinh !== undefined ? { LaHoiDongMacDinh: dto.LaHoiDongMacDinh } : {}),
+        ...(dto.ThoiGianHop !== undefined ? { ThoiGianHop: dto.ThoiGianHop ? new Date(dto.ThoiGianHop) : null } : {}),
+        ...(dto.HinhThucHop !== undefined ? { HinhThucHop: dto.HinhThucHop } : {}),
+        ...(meetingType === 'offline' ? { DiaDiem: (dto.DiaDiem ?? currentCouncil.DiaDiem)?.trim() || null, LinkHop: null } : {}),
+        ...(meetingType === 'online' ? { LinkHop: (dto.LinkHop ?? currentCouncil.LinkHop)?.trim() || null, DiaDiem: null } : {}),
       },
     );
     return this.findOne(id);
@@ -411,6 +426,15 @@ export class CouncilsService {
       },
     );
     return this.findType(id);
+  }
+
+  private validateMeetingDetails(meetingType: 'online' | 'offline', location?: string, meetingLink?: string) {
+    if (meetingType === 'offline' && !location?.trim()) {
+      throw new BadRequestException('Vui lòng nhập địa điểm cho cuộc họp trực tiếp');
+    }
+    if (meetingType === 'online' && !meetingLink?.trim()) {
+      throw new BadRequestException('Vui lòng nhập link cho cuộc họp online');
+    }
   }
 
   async removeType(id: number) {

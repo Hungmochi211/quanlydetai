@@ -1,9 +1,10 @@
-import { IsBoolean, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsDateString, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUrl, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
 export const COUNCIL_POSITIONS = ['Chủ tịch', 'Thư ký', 'Ủy viên', 'Phản biện'] as const;
 export const COUNCIL_BUSINESSES = ['approval', 'scoring', 'monitoring', 'liquidation', 'other'] as const;
+export const COUNCIL_MEETING_TYPES = ['online', 'offline'] as const;
 
 export class CreateCouncilTypeDto {
   @ApiProperty({ example: 'Hội đồng tuyển chọn cấp khoa' })
@@ -21,6 +22,7 @@ export class CreateCouncilTypeDto {
   @IsOptional()
   @IsString()
   MoTa?: string;
+
 }
 
 export class UpdateCouncilTypeDto {
@@ -40,6 +42,7 @@ export class UpdateCouncilTypeDto {
   @IsOptional()
   @IsString()
   MoTa?: string;
+
 }
 
 export class CreateCouncilDto {
@@ -63,6 +66,27 @@ export class CreateCouncilDto {
   @IsOptional()
   @IsBoolean()
   LaHoiDongMacDinh?: boolean;
+
+  @ApiProperty({ required: false, example: '2026-09-24T08:00:00.000Z' })
+  @IsOptional()
+  @IsDateString({}, { message: 'Thời gian họp không hợp lệ' })
+  ThoiGianHop?: string;
+
+  @ApiProperty({ enum: COUNCIL_MEETING_TYPES, example: 'offline' })
+  @IsIn(COUNCIL_MEETING_TYPES, { message: 'Hình thức họp chỉ có thể là online hoặc offline' })
+  HinhThucHop!: (typeof COUNCIL_MEETING_TYPES)[number];
+
+  @ApiProperty({ required: false, example: 'Phòng họp A2' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  DiaDiem?: string;
+
+  @ApiProperty({ required: false, example: 'https://meet.google.com/xxx-xxxx-xxx' })
+  @IsOptional()
+  @IsUrl({}, { message: 'Link họp không hợp lệ' })
+  @MaxLength(500)
+  LinkHop?: string;
 }
 
 export class UpdateCouncilDto {
@@ -88,6 +112,28 @@ export class UpdateCouncilDto {
   @IsOptional()
   @IsBoolean()
   LaHoiDongMacDinh?: boolean;
+
+  @ApiProperty({ required: false, example: '2026-09-24T08:00:00.000Z' })
+  @IsOptional()
+  @IsDateString({}, { message: 'Thời gian họp không hợp lệ' })
+  ThoiGianHop?: string;
+
+  @ApiProperty({ required: false, enum: COUNCIL_MEETING_TYPES, example: 'online' })
+  @IsOptional()
+  @IsIn(COUNCIL_MEETING_TYPES, { message: 'Hình thức họp chỉ có thể là online hoặc offline' })
+  HinhThucHop?: (typeof COUNCIL_MEETING_TYPES)[number];
+
+  @ApiProperty({ required: false, example: 'Phòng họp A2' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  DiaDiem?: string;
+
+  @ApiProperty({ required: false, example: 'https://meet.google.com/xxx-xxxx-xxx' })
+  @IsOptional()
+  @IsUrl({}, { message: 'Link họp không hợp lệ' })
+  @MaxLength(500)
+  LinkHop?: string;
 }
 
 export class AddCouncilMemberDto {

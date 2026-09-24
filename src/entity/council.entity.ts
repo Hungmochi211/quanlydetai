@@ -36,6 +36,19 @@ export class HoiDong {
   @Column({ type: 'nvarchar', length: 'MAX', nullable: true })
   MoTa?: string;
 
+  @Column({ type: 'datetime', nullable: true })
+  ThoiGianHop?: Date;
+
+  // online | offline
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  HinhThucHop?: 'online' | 'offline';
+
+  @Column({ type: 'nvarchar', length: 300, nullable: true })
+  DiaDiem?: string;
+
+  @Column({ type: 'nvarchar', length: 500, nullable: true })
+  LinkHop?: string;
+
   // Chỉ dùng một hội đồng mặc định cho mỗi nghiệp vụ tự động (ví dụ: monitoring).
   @Column({ type: 'bit', default: false })
   LaHoiDongMacDinh!: boolean;

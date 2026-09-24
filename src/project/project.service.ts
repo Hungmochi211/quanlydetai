@@ -178,13 +178,23 @@ export class ProjectService {
       }));
     }
 
-    const memberAccounts = [...new Set((prDto.ThanhVienIds || []).filter((account) => account && account !== user.TaiKhoan))];
-    if (memberAccounts.length) {
-      const students = await this.userRes.findBy({ TaiKhoan: In(memberAccounts) });
-      if (students.length !== memberAccounts.length || students.some((member) => member.VaiTro !== 'Sinh viên')) {
-        throw new BadRequestException('Thành viên đề tài phải là tài khoản có vai trò Sinh viên');
-      }
+    const selectedAccounts = [...new Set(
+      (prDto.ThanhVienIds || [])
+        .map((account) => account?.trim())
+        .filter((account): account is string => Boolean(account)),
+    )];
+    const participantAccounts = [...new Set([user.TaiKhoan, ...selectedAccounts])];
+    const participants = await this.userRes.findBy({ TaiKhoan: In(participantAccounts) });
+    const participantsByAccount = new Map(participants.map((participant) => [participant.TaiKhoan, participant]));
+    const invalidAccounts = participantAccounts.filter((account) => (
+      this.normalizeRole(participantsByAccount.get(account)?.VaiTro) !== 'sinh vien'
+    ));
+    if (invalidAccounts.length) {
+      throw new BadRequestException(
+        `Thành viên đề tài phải là tài khoản có vai trò Sinh viên: ${invalidAccounts.join(', ')}`,
+      );
     }
+    const memberAccounts = selectedAccounts.filter((account) => account !== user.TaiKhoan);
 
     //kiem tra nguoi dang ki
     const isRegister = await this.TVDTRes.findOne({

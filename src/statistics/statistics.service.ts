@@ -10,6 +10,7 @@ import { DeTai } from 'src/entity/project.entity';
 import { ThanhVienDT } from 'src/entity/pjmem.entity';
 import { PhanLoai } from 'src/entity/speclist.entity';
 import { HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
+import { MocDeTai } from 'src/entity/progress.entity';
 
 type ReportTopic = Pick<DeTai, 'MaDT' | 'TenDT' | 'Khoa' | 'TrangThai' | 'TienDo' | 'NgayKetThuc'>;
 
@@ -21,6 +22,7 @@ export class StatisticsService {
     @InjectRepository(PhanLoai) private readonly facultyRepository: Repository<PhanLoai>,
     @InjectRepository(ThanhVienHoiDong) private readonly councilMemberRepository: Repository<ThanhVienHoiDong>,
     @InjectRepository(HoiDongDeTai) private readonly councilAssignmentRepository: Repository<HoiDongDeTai>,
+    @InjectRepository(MocDeTai) private readonly milestoneRepository: Repository<MocDeTai>,
   ) {}
 
   private applyFilters(builder: SelectQueryBuilder<DeTai>, query: StatisticsQueryDto) {
@@ -107,15 +109,43 @@ export class StatisticsService {
   async getMyTopicStatistics(account: string) {
     const topics = await this.withFacultyNames(await this.getMyTopics(account));
     const now = new Date();
+    const topicCodes = topics.map((topic) => topic.MaDT);
+    const milestoneRecords = topicCodes.length
+      ? await this.milestoneRepository.find({
+          where: { MaDT: In(topicCodes) },
+          order: { ThuTu: 'ASC', MaMoc: 'ASC' },
+        })
+      : [];
+    const milestonesByTopic = new Map<string, MocDeTai[]>();
+    milestoneRecords.forEach((milestone) => {
+      const list = milestonesByTopic.get(milestone.MaDT) || [];
+      list.push(milestone);
+      milestonesByTopic.set(milestone.MaDT, list);
+    });
+    const getMilestoneStatus = (milestone: MocDeTai): 'completed' | 'in_progress' | 'upcoming' | 'not_started' => {
+      const status = this.normalizeMilestoneStatus(milestone.TrangThai);
+      if (status.includes('hoan thanh')) return 'completed';
+      if (status.includes('dang thuc hien')) return 'in_progress';
+      if (status.includes('chua bat dau')) return 'not_started';
+      return 'upcoming';
+    };
     const myTopics = topics.map((topic) => {
       const completed = this.isCompleted(topic);
       const overdue = !completed && topic.NgayKetThuc && new Date(topic.NgayKetThuc) < now;
+      const milestones = (milestonesByTopic.get(topic.MaDT) || []).map((milestone) => ({
+        name: milestone.TenMoc,
+        status: getMilestoneStatus(milestone),
+        deadline: new Date(milestone.NgayKetThuc).toISOString(),
+      }));
+      const nextMilestone = (milestonesByTopic.get(topic.MaDT) || []).find(
+        (milestone) => getMilestoneStatus(milestone) !== 'completed',
+      );
       return {
         id: topic.MaDT,
         topicName: topic.TenDT,
         status: completed ? 'completed' : overdue ? 'overdue' : 'in_progress',
-        milestones: [],
-        nextDeadline: topic.NgayKetThuc || null,
+        milestones,
+        nextDeadline: nextMilestone?.NgayKetThuc || topic.NgayKetThuc || null,
       };
     });
     const todoItems = myTopics.filter((topic) => topic.status === 'overdue' || (topic.nextDeadline && new Date(topic.nextDeadline).getTime() - now.getTime() < 7 * 86_400_000)).map((topic) => ({
@@ -125,6 +155,15 @@ export class StatisticsService {
       days: Math.abs(Math.ceil((new Date(topic.nextDeadline || now).getTime() - now.getTime()) / 86_400_000)),
     }));
     return { todoItems, myTopics };
+  }
+
+  private normalizeMilestoneStatus(status?: string) {
+    return (status || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .toLowerCase()
+      .trim();
   }
 
   async exportMyTopicsReport(account: string, query: StatisticsExportQueryDto) {

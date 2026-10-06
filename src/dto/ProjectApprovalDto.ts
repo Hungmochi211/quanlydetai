@@ -1,8 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class SubmitProjectForApprovalDto {
-  @ApiProperty({ enum: ['approval', 'scoring'], description: 'Loại hội đồng nhận đề tài' })
-  councilType!: 'approval' | 'scoring';
+  @ApiProperty({ enum: ['approval', 'scoring', 'liquidation'], description: 'Loại hội đồng nhận đề tài' })
+  councilType!: 'approval' | 'scoring' | 'liquidation';
 
   @ApiProperty({ required: false, description: 'Mã hội đồng đã được Admin gán cho đề tài' })
   councilId?: number;

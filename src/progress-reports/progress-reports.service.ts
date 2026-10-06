@@ -362,12 +362,60 @@ export class ProgressReportsService {
       await this.updateProjectProgressFromAcceptedMilestones(report.MaDT);
     }
 
+    if (dto.decision === 'liquidation') {
+      const project = await this.getProjectOrThrow(report.MaDT);
+      const liquidationType = await this.councilTypeRepository.findOne({
+        where: { NghiepVu: 'liquidation' },
+        order: { MaLoaiHoiDong: 'ASC' },
+      });
+
+      if (liquidationType) {
+        const pendingLiquidation = await this.councilRequestRepository.findOne({
+          where: { MaDT: report.MaDT, MaLoaiHoiDong: liquidationType.MaLoaiHoiDong, TrangThai: 'Chờ duyệt' },
+        });
+
+        if (!pendingLiquidation) {
+          const previousStatus = project.TrangThai;
+          const liquidationRequest = this.councilRequestRepository.create({
+            MaDT: report.MaDT,
+            MaBaoCaoTienDo: report.Id,
+            MaLoaiHoiDong: liquidationType.MaLoaiHoiDong,
+            TaiKhoanNguoiGui: taiKhoan,
+            LyDoYeuCau: `Chủ tịch Hội đồng theo dõi đề xuất thanh lý đề tài từ báo cáo "${report.KyBaoCao}". Nhận xét: ${dto.note.trim()}`,
+            TrangThai: 'Chờ duyệt',
+            TrangThaiTruocDo: previousStatus,
+          });
+          await this.councilRequestRepository.save(liquidationRequest);
+
+          project.TrangThai = 'Chờ phân công hội đồng thanh lý';
+          await this.projectRepository.save(project);
+
+          const allUsers = await this.userRepository.find();
+          const admins = allUsers.filter((u) => {
+            const role = (u.VaiTro || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+            return role === 'admin' || role === 'quan tri';
+          });
+          await Promise.all(admins.map((admin) => this.notificationsService.create(
+            { TaiKhoan: taiKhoan },
+            {
+              TkNguoiNhan: admin.TaiKhoan,
+              TieuDe: 'Hội đồng theo dõi đề xuất thanh lý đề tài',
+              NoiDung: `Chủ tịch Hội đồng theo dõi đề xuất thanh lý đề tài "${project.TenDT}" (Báo cáo: ${report.KyBaoCao}). Lý do: ${dto.note.trim()}`,
+              NgayTao: new Date(),
+            },
+          )));
+        }
+      }
+    }
+
     await this.notificationsService.create(
       { TaiKhoan: taiKhoan },
       {
         TkNguoiNhan: report.TaiKhoanNguoiGui,
-        TieuDe: 'Kết luận báo cáo tiến độ',
-        NoiDung: `Báo cáo ${report.KyBaoCao} được Chủ tịch hội đồng theo dõi kết luận: ${status}. ${dto.note.trim()}`,
+        TieuDe: status === 'Đề xuất thanh lý' ? 'Hội đồng theo dõi đề xuất thanh lý đề tài' : 'Kết luận báo cáo tiến độ',
+        NoiDung: status === 'Đề xuất thanh lý'
+          ? `Báo cáo ${report.KyBaoCao} được Chủ tịch hội đồng theo dõi kết luận: Đề xuất thanh lý và đã gửi yêu cầu tới Ban Quản lý để thành lập Hội đồng thanh lý. Nội dung: ${dto.note.trim()}`
+          : `Báo cáo ${report.KyBaoCao} được Chủ tịch hội đồng theo dõi kết luận: ${status}. ${dto.note.trim()}`,
         NgayTao: new Date(),
       },
     );

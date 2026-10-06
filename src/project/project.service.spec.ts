@@ -101,9 +101,13 @@ describe('ProjectService - xét duyệt nhiều hội đồng', () => {
         create: jest.fn((data) => data),
         save: jest.fn(async (data) => data),
       } as any,
-      { find: jest.fn(async ({ where }) => where.MaHoiDong === 10
+      { find: jest.fn(async ({ where }: any) => where?.MaHoiDong === 10
         ? [{ NguoiDung: { TaiKhoan: 'scorer-1' } }]
         : [{ NguoiDung: { TaiKhoan: 'committee-1' } }, { NguoiDung: { TaiKhoan: 'committee-2' } }]) } as any,
+      { findOne: jest.fn(async () => null) } as any,
+      { find: jest.fn(async () => []) } as any,
+      { findBy: jest.fn(async () => []) } as any,
+      { findOne: jest.fn(async () => null) } as any,
       { create: jest.fn() } as any,
     );
   });

@@ -21,4 +21,10 @@ export class UpdateProfileDto {
   @Type(() => Number)
   @IsInt({ message: 'Số điện thoại không hợp lệ' })
   SDT?: number;
+
+  @ApiProperty({ required: false, example: '/uploads/avatars/user-123.jpg' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  Avatar?: string;
 }

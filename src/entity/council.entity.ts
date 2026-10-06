@@ -155,6 +155,9 @@ export class YeuCauPhanCongHoiDong {
   @Column({ type: 'nvarchar', length: 'MAX', nullable: true })
   LyDoTuChoi?: string;
 
+  @Column({ type: 'nvarchar', length: 50, nullable: true })
+  TrangThaiTruocDo?: string;
+
   @Column({ type: 'int', nullable: true })
   YeuCauGocId?: number;
 

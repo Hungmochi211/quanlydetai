@@ -1,10 +1,12 @@
-import { Body, Controller, Post, UseGuards, Get, Request, Put } from '@nestjs/common';
+import { Body, Controller, Post, UseGuards, Get, Request, Put, Delete, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthGuard } from './auth.guard';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { LoginDto } from 'src/dto/LoginDto';
 import { RegisterDto } from 'src/dto/RegisterDto';
 import { UpdateProfileDto } from 'src/dto/UpdateProfileDto';
+import { avatarMulterOptions } from './avatar-multer.config';
 
 @Controller('auth')
 @ApiTags('auth')
@@ -46,5 +48,32 @@ export class AuthCotroller {
   @UseGuards(AuthGuard)
   updateProfile(@Request() req, @Body() body: UpdateProfileDto) {
     return this.authService.updateProfile(req.user.TaiKhoan, body);
+  }
+
+  @Post('avatar')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard)
+  @UseInterceptors(FileInterceptor('avatar', avatarMulterOptions))
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        avatar: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  uploadAvatar(@Request() req, @UploadedFile() file: Express.Multer.File) {
+    return this.authService.uploadAvatar(req.user.TaiKhoan, file);
+  }
+
+  @Delete('avatar')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard)
+  removeAvatar(@Request() req) {
+    return this.authService.removeAvatar(req.user.TaiKhoan);
   }
 }

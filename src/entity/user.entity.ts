@@ -23,6 +23,9 @@ export class NguoiDung {
   @Column({ type: 'bit', default: false })
   DaHoanThienHoSo!: boolean;
 
+  @Column({ type: 'nvarchar', length: 500, nullable: true })
+  Avatar?: string;
+
   @Column({ type: 'int', nullable: true })
   SDT!: number;
 

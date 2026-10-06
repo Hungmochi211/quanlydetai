@@ -9,7 +9,7 @@ import { LichSuXetDuyetDeTai } from 'src/entity/project-approval-history.entity'
 import { DeTai } from 'src/entity/project.entity';
 import { NguoiDung } from 'src/entity/user.entity';
 import { TaiLieu } from 'src/entity/document.entity';
-import { HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
+import { HoiDongDeTai, ThanhVienHoiDong, YeuCauPhanCongHoiDong } from 'src/entity/council.entity';
 import { In, Repository } from 'typeorm';
 import { ReviewProjectDto, SubmitProjectForApprovalDto } from 'src/dto/ProjectApprovalDto';
 import { NotificationsService } from 'src/notifications/notifications.service';
@@ -44,6 +44,9 @@ export class ProjectService {
 
     @InjectRepository(ThanhVienHoiDong)
     private councilMemberRes: Repository<ThanhVienHoiDong>,
+
+    @InjectRepository(YeuCauPhanCongHoiDong)
+    private councilRequestRes: Repository<YeuCauPhanCongHoiDong>,
 
     @InjectRepository(ChuyenNganh)
     private specializationRes: Repository<ChuyenNganh>,
@@ -442,23 +445,27 @@ export class ProjectService {
     if (!project) throw new NotFoundException('Không tìm thấy đề tài này');
     await this.ensureProjectLeader(maDT, sender);
 
-    if (dto.councilType !== 'approval' && dto.councilType !== 'scoring') {
+    if (dto.councilType !== 'approval' && dto.councilType !== 'scoring' && dto.councilType !== 'liquidation') {
       throw new BadRequestException('Loại hội đồng không hợp lệ');
     }
 
     const isScoringCouncil = dto.councilType === 'scoring';
-    const councilType = isScoringCouncil ? 'Chấm điểm' : 'Xét duyệt';
-    const councilRole = isScoringCouncil ? 'Hội đồng chấm điểm' : 'Hội đồng xét duyệt';
-    const requiredCouncilBusiness = isScoringCouncil ? 'scoring' : 'approval';
+    const isLiquidationCouncil = dto.councilType === 'liquidation';
+    const councilType = isScoringCouncil ? 'Chấm điểm' : isLiquidationCouncil ? 'Thanh lý' : 'Xét duyệt';
+    const councilRole = isScoringCouncil ? 'Hội đồng chấm điểm' : isLiquidationCouncil ? 'Hội đồng thanh lý' : 'Hội đồng xét duyệt';
+    const requiredCouncilBusiness = isScoringCouncil ? 'scoring' : isLiquidationCouncil ? 'liquidation' : 'approval';
 
     if (isScoringCouncil && project.TrangThai !== 'Đã phê duyệt') {
       throw new BadRequestException('Chỉ được gửi Hội đồng chấm điểm sau khi đề tài đã được phê duyệt');
+    }
+    if (isLiquidationCouncil && !['Đã phê duyệt', 'Bắt đầu', 'Chờ thanh lý'].includes(project.TrangThai)) {
+      throw new BadRequestException('Chỉ đề tài đang thực hiện hoặc chờ thanh lý mới được gửi hồ sơ thanh lý');
     }
 
     const existingApprovals = await this.approvalRes.count({
       where: { MaDT: maDT, LoaiHoiDong: councilType },
     });
-    const isResubmittingRejectedProject = !isScoringCouncil && project.TrangThai === 'Từ chối';
+    const isResubmittingRejectedProject = !isScoringCouncil && !isLiquidationCouncil && project.TrangThai === 'Từ chối';
     if (existingApprovals > 0 && !isResubmittingRejectedProject) {
       throw new BadRequestException(`Đề tài đã được gửi ${councilRole} và không thể gửi lại`);
     }
@@ -520,8 +527,8 @@ export class ProjectService {
     );
 
     if (!isScoringCouncil) {
-      project.TrangThai = 'Chờ phê duyệt';
-      project.NgayXetDuyet = null;
+      project.TrangThai = isLiquidationCouncil ? 'Chờ thanh lý' : 'Chờ phê duyệt';
+      if (!isLiquidationCouncil) project.NgayXetDuyet = null;
       await this.DTRes.save(project);
     }
 
@@ -531,8 +538,8 @@ export class ProjectService {
           { TaiKhoan: sender },
           {
             TkNguoiNhan: TaiKhoan,
-            TieuDe: isScoringCouncil ? 'Có đề tài chờ chấm điểm' : 'Có đề tài chờ xét duyệt',
-            NoiDung: `Đề tài "${project.TenDT}" đang chờ bạn ${isScoringCouncil ? 'chấm điểm' : 'xét duyệt'}${isResubmittingRejectedProject ? ' lại' : ''}.${dto.note ? ` Ghi chú: ${dto.note}` : ''}`,
+            TieuDe: isScoringCouncil ? 'Có đề tài chờ chấm điểm' : isLiquidationCouncil ? 'Có đề tài chờ xem xét thanh lý' : 'Có đề tài chờ xét duyệt',
+            NoiDung: `Đề tài "${project.TenDT}" đang chờ bạn ${isScoringCouncil ? 'chấm điểm' : isLiquidationCouncil ? 'xem xét thanh lý' : 'xét duyệt'}${isResubmittingRejectedProject ? ' lại' : ''}.${dto.note ? ` Ghi chú: ${dto.note}` : ''}`,
             NgayTao: new Date(),
           },
         ),
@@ -618,19 +625,25 @@ export class ProjectService {
 
   async reviewProject(maDT: string, reviewerAccount: string, dto: ReviewProjectDto) {
     if (dto.decision !== 'approved' && dto.decision !== 'rejected') {
-      throw new BadRequestException('Quyết định xét duyệt không hợp lệ');
+      throw new BadRequestException('Quyết định không hợp lệ');
     }
 
-    const approval = await this.approvalRes.findOne({
-      where: { MaDT: maDT, TaiKhoanHoiDong: reviewerAccount, LoaiHoiDong: 'Xét duyệt' },
+    let approval = await this.approvalRes.findOne({
+      where: { MaDT: maDT, TaiKhoanHoiDong: reviewerAccount, LoaiHoiDong: 'Thanh lý' },
     });
     if (!approval) {
-      throw new NotFoundException('Bạn không nằm trong danh sách hội đồng xét duyệt đề tài này');
+      approval = await this.approvalRes.findOne({
+        where: { MaDT: maDT, TaiKhoanHoiDong: reviewerAccount, LoaiHoiDong: 'Xét duyệt' },
+      });
+    }
+    if (!approval) {
+      throw new NotFoundException('Bạn không nằm trong danh sách hội đồng của đề tài này');
     }
     if (approval.TrangThai !== 'Chờ phê duyệt') {
-      throw new BadRequestException('Bạn đã phản hồi yêu cầu xét duyệt này');
+      throw new BadRequestException('Bạn đã phản hồi yêu cầu này');
     }
 
+    const isLiquidation = approval.LoaiHoiDong === 'Thanh lý';
     approval.TrangThai = dto.decision === 'approved' ? 'Đã phê duyệt' : 'Từ chối';
     approval.GhiChu = dto.note?.trim() || undefined;
     approval.NgayPhanHoi = new Date();
@@ -639,35 +652,72 @@ export class ProjectService {
     const project = await this.DTRes.findOne({ where: { MaDT: maDT } });
     if (!project) throw new NotFoundException('Không tìm thấy đề tài này');
 
-    const approvals = await this.approvalRes.find({ where: { MaDT: maDT, LoaiHoiDong: 'Xét duyệt' } });
-    if (approvals.some((item) => item.TrangThai === 'Từ chối')) {
-      project.TrangThai = 'Từ chối';
-    } else if (approvals.length > 0 && approvals.every((item) => item.TrangThai === 'Đã phê duyệt')) {
-      project.TrangThai = 'Đã phê duyệt';
-      project.NgayXetDuyet = new Date();
-    } else {
-      project.TrangThai = 'Chờ phê duyệt';
-    }
-    await this.DTRes.save(project);
+    const approvals = await this.approvalRes.find({ where: { MaDT: maDT, LoaiHoiDong: approval.LoaiHoiDong } });
 
-    if (dto.decision === 'rejected') {
+    if (isLiquidation) {
+      if (approvals.some((item) => item.TrangThai === 'Từ chối')) {
+        // Có thành viên từ chối thanh lý -> đề tài quay lại trạng thái cũ trước khi xin thanh lý
+        const lastLiquidationRequest = await this.councilRequestRes.findOne({
+          where: { MaDT: maDT },
+          order: { Id: 'DESC' },
+        });
+        project.TrangThai = lastLiquidationRequest?.TrangThaiTruocDo || 'Đã phê duyệt';
+      } else if (approvals.length > 0 && approvals.every((item) => item.TrangThai === 'Đã phê duyệt')) {
+        // Tất cả thành viên đồng ý thanh lý -> đề tài chuyển sang Đã thanh lý
+        project.TrangThai = 'Đã thanh lý';
+        project.NgayKetThuc = new Date();
+      } else {
+        project.TrangThai = 'Chờ thanh lý';
+      }
+      await this.DTRes.save(project);
+
       const leader = await this.getLeaderById(maDT);
       if (leader) {
         const reviewers = await this.userRes.find({
           where: { TaiKhoan: In([reviewerAccount]) },
         });
         const reviewerName = reviewers[0]?.TenDayDu || reviewerAccount;
-        const reason = approval.GhiChu || 'Chưa cung cấp lý do cụ thể';
-
+        const decisionText = dto.decision === 'approved' ? 'Đồng ý thanh lý' : 'Không đồng ý thanh lý';
         await this.notificationsService.create(
           { TaiKhoan: reviewerAccount },
           {
             TkNguoiNhan: leader.TaiKhoan,
-            TieuDe: 'Đề tài bị từ chối xét duyệt',
-            NoiDung: `Hội đồng ${reviewerName} đã từ chối đề tài "${project.TenDT}". Lý do: ${reason}`,
+            TieuDe: 'Kết quả xem xét thanh lý đề tài',
+            NoiDung: `Hội đồng thanh lý ${reviewerName} đã đưa ra kết luận: ${decisionText} cho đề tài "${project.TenDT}".${approval.GhiChu ? ` Ghi chú: ${approval.GhiChu}` : ''}`,
             NgayTao: new Date(),
           },
         );
+      }
+    } else {
+      if (approvals.some((item) => item.TrangThai === 'Từ chối')) {
+        project.TrangThai = 'Từ chối';
+      } else if (approvals.length > 0 && approvals.every((item) => item.TrangThai === 'Đã phê duyệt')) {
+        project.TrangThai = 'Đã phê duyệt';
+        project.NgayXetDuyet = new Date();
+      } else {
+        project.TrangThai = 'Chờ phê duyệt';
+      }
+      await this.DTRes.save(project);
+
+      if (dto.decision === 'rejected') {
+        const leader = await this.getLeaderById(maDT);
+        if (leader) {
+          const reviewers = await this.userRes.find({
+            where: { TaiKhoan: In([reviewerAccount]) },
+          });
+          const reviewerName = reviewers[0]?.TenDayDu || reviewerAccount;
+          const reason = approval.GhiChu || 'Chưa cung cấp lý do cụ thể';
+
+          await this.notificationsService.create(
+            { TaiKhoan: reviewerAccount },
+            {
+              TkNguoiNhan: leader.TaiKhoan,
+              TieuDe: 'Đề tài bị từ chối xét duyệt',
+              NoiDung: `Hội đồng ${reviewerName} đã từ chối đề tài "${project.TenDT}". Lý do: ${reason}`,
+              NgayTao: new Date(),
+            },
+          );
+        }
       }
     }
 

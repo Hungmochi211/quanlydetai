@@ -238,6 +238,7 @@ export class CouncilsService {
         LyDoYeuCau: dto.LyDoYeuCau?.trim() || undefined,
         YeuCauGocId: originalRequestId,
         TrangThai: 'Chờ duyệt',
+        TrangThaiTruocDo: project.TrangThai,
       }),
     );
 
@@ -247,6 +248,10 @@ export class CouncilsService {
     }
     if (councilType.NghiepVu === 'scoring') {
       project.TrangThai = 'Chờ phân công hội đồng nghiệm thu';
+      await this.projectRepository.save(project);
+    }
+    if (councilType.NghiepVu === 'liquidation') {
+      project.TrangThai = 'Chờ phân công hội đồng thanh lý';
       await this.projectRepository.save(project);
     }
 
@@ -340,6 +345,30 @@ export class CouncilsService {
       project.TrangThai = 'Chờ nghiệm thu';
       await this.projectRepository.save(project);
     }
+    if (council.LoaiHoiDong.NghiepVu === 'liquidation') {
+      project.TrangThai = 'Chờ thanh lý';
+      await this.projectRepository.save(project);
+
+      // Tự động khởi tạo phiên xem xét thanh lý cho các thành viên hội đồng thanh lý
+      const members = council.ThanhVienHoiDong || [];
+      for (const member of members) {
+        const existing = await this.legacyApprovalRepository.findOne({
+          where: { MaDT: request.MaDT, TaiKhoanHoiDong: member.TaiKhoan, LoaiHoiDong: 'Thanh lý' },
+        });
+        if (!existing) {
+          await this.legacyApprovalRepository.save(
+            this.legacyApprovalRepository.create({
+              MaDT: request.MaDT,
+              TaiKhoanHoiDong: member.TaiKhoan,
+              MaHoiDong: council.MaHoiDong,
+              LoaiHoiDong: 'Thanh lý',
+              TrangThai: 'Chờ phê duyệt',
+              GhiChu: request.LyDoYeuCau,
+            }),
+          );
+        }
+      }
+    }
 
     await this.notifications.create(
       { TaiKhoan: adminAccount },
@@ -375,6 +404,10 @@ export class CouncilsService {
     const project = await this.getProject(request.MaDT);
     if (request.LoaiHoiDong.NghiepVu === 'approval') {
       project.TrangThai = 'Nháp';
+      await this.projectRepository.save(project);
+    }
+    if (request.LoaiHoiDong.NghiepVu === 'liquidation') {
+      project.TrangThai = request.TrangThaiTruocDo || 'Đã phê duyệt';
       await this.projectRepository.save(project);
     }
 
@@ -490,6 +523,9 @@ export class CouncilsService {
     }
     if (business === 'scoring' && project.TrangThai !== 'Chờ nghiệm thu') {
       throw new BadRequestException('Chỉ đề tài ở trạng thái Chờ nghiệm thu mới được yêu cầu hội đồng nghiệm thu');
+    }
+    if (business === 'liquidation' && !['Đã phê duyệt', 'Bắt đầu'].includes(project.TrangThai)) {
+      throw new BadRequestException('Chỉ đề tài đang trong quá trình thực hiện mới được yêu cầu hội đồng thanh lý');
     }
   }
 

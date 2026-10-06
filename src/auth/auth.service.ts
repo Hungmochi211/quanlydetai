@@ -8,7 +8,10 @@ import { RegisterDto } from 'src/dto/RegisterDto';
 import { UpdateProfileDto } from 'src/dto/UpdateProfileDto';
 import { UserService } from 'src/user/user.service';
 import bcrypt from 'bcrypt';
+import { existsSync, unlinkSync } from 'fs';
+import { join } from 'path';
 import { sendMail } from './gmail';
+import { AVATAR_UPLOAD_DIR } from './avatar-multer.config';
 
 @Injectable()
 export class AuthService {
@@ -127,6 +130,7 @@ export class AuthService {
         TenDayDu: data.TenDayDu,
         Gmail: data.Gmail,
         SDT: data.SDT,
+        Avatar: data.Avatar,
       }).filter(([, value]) => value !== undefined),
     );
 
@@ -138,10 +142,60 @@ export class AuthService {
     return { message: 'Cập nhật thành công' };
   }
 
+  async uploadAvatar(TaiKhoan: string, file?: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('Vui lòng chọn file ảnh để tải lên');
+    }
+
+    const currentUser = await this.userRes.findOne({ where: { TaiKhoan } });
+    if (!currentUser) throw new NotFoundException('Không tìm thấy tài khoản');
+
+    // Xóa file avatar cũ nếu tồn tại trên ổ đĩa
+    if (currentUser.Avatar && currentUser.Avatar.startsWith('/uploads/avatars/')) {
+      const oldFileName = currentUser.Avatar.replace('/uploads/avatars/', '');
+      const oldFilePath = join(AVATAR_UPLOAD_DIR, oldFileName);
+      if (existsSync(oldFilePath)) {
+        try {
+          unlinkSync(oldFilePath);
+        } catch {
+          // Bỏ qua lỗi nếu không thể xóa file cũ
+        }
+      }
+    }
+
+    const avatarPath = `/uploads/avatars/${file.filename}`;
+    await this.userRes.update({ TaiKhoan }, { Avatar: avatarPath });
+
+    return {
+      message: 'Cập nhật ảnh đại diện thành công',
+      avatarUrl: avatarPath,
+    };
+  }
+
+  async removeAvatar(TaiKhoan: string) {
+    const currentUser = await this.userRes.findOne({ where: { TaiKhoan } });
+    if (!currentUser) throw new NotFoundException('Không tìm thấy tài khoản');
+
+    if (currentUser.Avatar && currentUser.Avatar.startsWith('/uploads/avatars/')) {
+      const oldFileName = currentUser.Avatar.replace('/uploads/avatars/', '');
+      const oldFilePath = join(AVATAR_UPLOAD_DIR, oldFileName);
+      if (existsSync(oldFilePath)) {
+        try {
+          unlinkSync(oldFilePath);
+        } catch {
+          // Bỏ qua lỗi
+        }
+      }
+    }
+
+    await this.userRes.update({ TaiKhoan }, { Avatar: null as any });
+    return { message: 'Đã xóa ảnh đại diện' };
+  }
+
   async getProfile(TaiKhoan: string) {
     const user = await this.userRes.findOne({
       where: { TaiKhoan: TaiKhoan },
-      select: ['TaiKhoan', 'TenDayDu', 'SDT', 'Gmail', 'VaiTro', 'DaHoanThienHoSo'],
+      select: ['TaiKhoan', 'TenDayDu', 'SDT', 'Gmail', 'VaiTro', 'DaHoanThienHoSo', 'Avatar'],
     });
 
     return user;

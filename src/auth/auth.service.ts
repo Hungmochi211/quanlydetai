@@ -142,6 +142,22 @@ export class AuthService {
     return { message: 'Cập nhật thành công' };
   }
 
+  private deleteAvatarFile(avatarPath?: string) {
+    if (!avatarPath || !avatarPath.startsWith('/private-uploads/avatars/')) return;
+
+    const fileName = avatarPath.replace('/private-uploads/avatars/', '');
+    if (!fileName) return;
+
+    const targetPath = join(AVATAR_UPLOAD_DIR, fileName);
+    if (existsSync(targetPath)) {
+      try {
+        unlinkSync(targetPath);
+      } catch {
+        // Bỏ qua lỗi nếu không thể xóa file
+      }
+    }
+  }
+
   async uploadAvatar(TaiKhoan: string, file?: Express.Multer.File) {
     if (!file) {
       throw new BadRequestException('Vui lòng chọn file ảnh để tải lên');
@@ -151,19 +167,9 @@ export class AuthService {
     if (!currentUser) throw new NotFoundException('Không tìm thấy tài khoản');
 
     // Xóa file avatar cũ nếu tồn tại trên ổ đĩa
-    if (currentUser.Avatar && currentUser.Avatar.startsWith('/uploads/avatars/')) {
-      const oldFileName = currentUser.Avatar.replace('/uploads/avatars/', '');
-      const oldFilePath = join(AVATAR_UPLOAD_DIR, oldFileName);
-      if (existsSync(oldFilePath)) {
-        try {
-          unlinkSync(oldFilePath);
-        } catch {
-          // Bỏ qua lỗi nếu không thể xóa file cũ
-        }
-      }
-    }
+    this.deleteAvatarFile(currentUser.Avatar);
 
-    const avatarPath = `/uploads/avatars/${file.filename}`;
+    const avatarPath = `/private-uploads/avatars/${file.filename}`;
     await this.userRes.update({ TaiKhoan }, { Avatar: avatarPath });
 
     return {
@@ -176,17 +182,7 @@ export class AuthService {
     const currentUser = await this.userRes.findOne({ where: { TaiKhoan } });
     if (!currentUser) throw new NotFoundException('Không tìm thấy tài khoản');
 
-    if (currentUser.Avatar && currentUser.Avatar.startsWith('/uploads/avatars/')) {
-      const oldFileName = currentUser.Avatar.replace('/uploads/avatars/', '');
-      const oldFilePath = join(AVATAR_UPLOAD_DIR, oldFileName);
-      if (existsSync(oldFilePath)) {
-        try {
-          unlinkSync(oldFilePath);
-        } catch {
-          // Bỏ qua lỗi
-        }
-      }
-    }
+    this.deleteAvatarFile(currentUser.Avatar);
 
     await this.userRes.update({ TaiKhoan }, { Avatar: null as any });
     return { message: 'Đã xóa ảnh đại diện' };

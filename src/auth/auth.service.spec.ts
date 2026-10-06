@@ -67,4 +67,28 @@ describe('AuthService', () => {
       expect.objectContaining({ DaHoanThienHoSo: true }),
     );
   });
+
+  it('lưu đường dẫn avatar mới trong /private-uploads/avatars/', async () => {
+    const mockFile = {
+      filename: 'student01-123456.jpg',
+    } as Express.Multer.File;
+
+    const result = await service.uploadAvatar('student01', mockFile);
+
+    expect(result.avatarUrl).toBe('/private-uploads/avatars/student01-123456.jpg');
+    expect(userRepository.update).toHaveBeenCalledWith(
+      { TaiKhoan: 'student01' },
+      { Avatar: '/private-uploads/avatars/student01-123456.jpg' },
+    );
+  });
+
+  it('xóa avatar và cập nhật DB về null', async () => {
+    const result = await service.removeAvatar('student01');
+
+    expect(result.message).toBe('Đã xóa ảnh đại diện');
+    expect(userRepository.update).toHaveBeenCalledWith(
+      { TaiKhoan: 'student01' },
+      { Avatar: null },
+    );
+  });
 });

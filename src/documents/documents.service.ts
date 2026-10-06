@@ -393,11 +393,7 @@ export class DocumentsService {
 
   private getPhysicalPathForDocument(taiLieu: TaiLieu): string {
     const fileName = basename(taiLieu.FilePath);
-    const isLegacyPublicFile = taiLieu.FilePath.includes('uploads/documents');
-    const directory = isLegacyPublicFile
-      ? join('uploads', 'documents')
-      : join('private-uploads', 'documents');
-    return join(process.cwd(), directory, fileName);
+    return join(process.cwd(), 'private-uploads', 'documents', fileName);
   }
 
   /**

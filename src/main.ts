@@ -6,6 +6,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
+import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
 async function bootstrap() {
@@ -21,8 +22,12 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
   const documentFactoryApp = () => SwaggerModule.createDocument(app, config);
-  app.useStaticAssets(join(__dirname, '..', 'uploads'), {
-    prefix: '/uploads',
+  const avatarUploadDir = join(process.cwd(), 'private-uploads', 'avatars');
+  if (!existsSync(avatarUploadDir)) {
+    mkdirSync(avatarUploadDir, { recursive: true });
+  }
+  app.useStaticAssets(avatarUploadDir, {
+    prefix: '/private-uploads/avatars',
   });
 
   SwaggerModule.setup('api', app, documentFactoryApp);

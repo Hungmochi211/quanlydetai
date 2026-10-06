@@ -4,7 +4,7 @@ import { extname, join } from 'path';
 import { BadRequestException } from '@nestjs/common';
 import { MulterOptions } from '@nestjs/platform-express/multer/interfaces/multer-options.interface';
 
-export const AVATAR_UPLOAD_DIR = join(process.cwd(), 'uploads', 'avatars');
+export const AVATAR_UPLOAD_DIR = join(process.cwd(), 'private-uploads', 'avatars');
 if (!existsSync(AVATAR_UPLOAD_DIR)) {
   mkdirSync(AVATAR_UPLOAD_DIR, { recursive: true });
 }

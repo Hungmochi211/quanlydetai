@@ -7,6 +7,7 @@ import { ThanhVienDT } from 'src/entity/pjmem.entity';
 import { PhanLoai } from 'src/entity/speclist.entity';
 import { HoiDong, HoiDongDeTai, LoaiHoiDong, ThanhVienHoiDong } from 'src/entity/council.entity';
 import { MocDeTai } from 'src/entity/progress.entity';
+import { XetDuyetDeTai } from 'src/entity/project-approval.entity';
 import { StatisticsController } from './statistics.controller';
 import { StatisticsService } from './statistics.service';
 
@@ -21,6 +22,7 @@ import { StatisticsService } from './statistics.service';
       HoiDongDeTai,
       LoaiHoiDong,
       MocDeTai,
+      XetDuyetDeTai,
     ]),
     AuthModule,
     AdminUsersModule,

@@ -11,6 +11,7 @@ import { ThanhVienDT } from 'src/entity/pjmem.entity';
 import { PhanLoai } from 'src/entity/speclist.entity';
 import { HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
 import { MocDeTai } from 'src/entity/progress.entity';
+import { XetDuyetDeTai } from 'src/entity/project-approval.entity';
 
 type ReportTopic = Pick<DeTai, 'MaDT' | 'TenDT' | 'Khoa' | 'TrangThai' | 'TienDo' | 'NgayKetThuc'>;
 
@@ -23,6 +24,7 @@ export class StatisticsService {
     @InjectRepository(ThanhVienHoiDong) private readonly councilMemberRepository: Repository<ThanhVienHoiDong>,
     @InjectRepository(HoiDongDeTai) private readonly councilAssignmentRepository: Repository<HoiDongDeTai>,
     @InjectRepository(MocDeTai) private readonly milestoneRepository: Repository<MocDeTai>,
+    @InjectRepository(XetDuyetDeTai) private readonly approvalRepository: Repository<XetDuyetDeTai>,
   ) {}
 
   private applyFilters(builder: SelectQueryBuilder<DeTai>, query: StatisticsQueryDto) {
@@ -347,25 +349,64 @@ export class StatisticsService {
       ).values(),
     ];
 
+    const projectCodes = uniqueAssignments.map((a) => a.MaDT);
+    const myApprovals = projectCodes.length
+      ? await this.approvalRepository.find({
+          where: {
+            MaDT: In(projectCodes),
+            TaiKhoanHoiDong: account,
+          },
+        })
+      : [];
+
     const topics = uniqueAssignments.map((assignment) => {
       const project = assignment.DeTai;
       const statusNormalized = (project.TrangThai || '').toLowerCase();
+      const myApproval = myApprovals.find((app) => app.MaDT === assignment.MaDT);
+
       let status: 'pending' | 'approved' | 'rejected' = 'pending';
+
+      // Ưu tiên 1: Kết quả phê duyệt / phản hồi của chính thành viên hội đồng này
+      if (myApproval) {
+        if (myApproval.TrangThai === 'Đã phê duyệt') {
+          status = 'approved';
+        } else if (myApproval.TrangThai === 'Từ chối') {
+          status = 'rejected';
+        } else {
+          status = 'pending';
+        }
+      } else {
+        // Ưu tiên 2: Xét theo trạng thái chung của đề tài
+        if (
+          statusNormalized.includes('từ chối') ||
+          statusNormalized.includes('không đạt') ||
+          statusNormalized.includes('hủy')
+        ) {
+          status = 'rejected';
+        } else if (
+          statusNormalized.includes('phê duyệt') ||
+          statusNormalized.includes('hoàn thành') ||
+          statusNormalized.includes('nghiệm thu') ||
+          statusNormalized.includes('đạt') ||
+          statusNormalized.includes('thanh lý') // Đã thanh lý
+        ) {
+          if (statusNormalized === 'chờ thanh lý') {
+            status = 'pending';
+          } else {
+            status = 'approved';
+          }
+        } else {
+          status = 'pending';
+        }
+      }
+
+      // Nếu đề tài đã ở trạng thái cuối ("Đã thanh lý", "Đã nghiệm thu", "Hoàn thành") thì luôn xem là đã xử lý/phê duyệt
       if (
-        statusNormalized.includes('từ chối') ||
-        statusNormalized.includes('không đạt') ||
-        statusNormalized.includes('hủy')
-      ) {
-        status = 'rejected';
-      } else if (
-        statusNormalized.includes('phê duyệt') ||
-        statusNormalized.includes('hoàn thành') ||
-        statusNormalized.includes('nghiệm thu') ||
-        statusNormalized.includes('đạt')
+        statusNormalized === 'đã thanh lý' ||
+        statusNormalized === 'đã nghiệm thu' ||
+        statusNormalized === 'hoàn thành'
       ) {
         status = 'approved';
-      } else {
-        status = 'pending';
       }
 
       const councilTypeName =
@@ -380,7 +421,9 @@ export class StatisticsService {
         status,
         councilTypeName,
         submittedDate: (project.NgayTao || assignment.NgayPhanCong || new Date()).toISOString(),
-        processedDate: project.NgayXetDuyet
+        processedDate: myApproval?.NgayPhanHoi
+          ? new Date(myApproval.NgayPhanHoi).toISOString()
+          : project.NgayXetDuyet
           ? new Date(project.NgayXetDuyet).toISOString()
           : status !== 'pending' && project.NgayKetThuc
           ? new Date(project.NgayKetThuc).toISOString()

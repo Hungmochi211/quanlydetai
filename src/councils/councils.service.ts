@@ -303,15 +303,17 @@ export class CouncilsService {
       throw new BadRequestException('Hội đồng được chọn không đúng loại theo yêu cầu');
     }
 
-    if (request.MaBaoCaoTienDo) {
+    const report = request.MaBaoCaoTienDo
+      ? await this.progressReportRepository.findOne({ where: { Id: request.MaBaoCaoTienDo } })
+      : null;
+
+    if (report && report.LoaiBaoCao === 'Nghiệm thu từng phần') {
       if (council.LoaiHoiDong.NghiepVu !== 'scoring') {
         throw new BadRequestException('Hồ sơ nghiệm thu từng phần phải được gán Hội đồng nghiệm thu');
       }
       if (council.ThanhVienHoiDong.length === 0) {
         throw new BadRequestException('Hội đồng phải có ít nhất một thành viên trước khi phân công');
       }
-      const report = await this.progressReportRepository.findOne({ where: { Id: request.MaBaoCaoTienDo } });
-      if (!report) throw new NotFoundException('Không tìm thấy hồ sơ nghiệm thu từng phần');
       request.TrangThai = 'Đã chấp nhận';
       request.MaHoiDong = councilId;
       request.TaiKhoanNguoiXuLy = adminAccount;
@@ -395,10 +397,13 @@ export class CouncilsService {
     await this.requestRepository.save(request);
 
     if (request.MaBaoCaoTienDo) {
-      await this.progressReportRepository.update(request.MaBaoCaoTienDo, {
-        TrangThaiPhanCongHoiDong: 'Từ chối',
-        MaHoiDongNghiemThu: undefined,
-      });
+      const report = await this.progressReportRepository.findOne({ where: { Id: request.MaBaoCaoTienDo } });
+      if (report && report.LoaiBaoCao === 'Nghiệm thu từng phần') {
+        await this.progressReportRepository.update(request.MaBaoCaoTienDo, {
+          TrangThaiPhanCongHoiDong: 'Từ chối',
+          MaHoiDongNghiemThu: undefined,
+        });
+      }
     }
 
     const project = await this.getProject(request.MaDT);

@@ -157,4 +157,44 @@ describe('CouncilsService', () => {
       NghiepVu: 'other',
     })).resolves.toMatchObject({ TenLoaiHoiDong: 'Tuyển chọn cấp khoa', NghiepVu: 'other' });
   });
+
+  it('phê duyệt yêu cầu hội đồng thanh lý có liên kết báo cáo định kỳ', async () => {
+    councilTypes.push({ MaLoaiHoiDong: 4, TenLoaiHoiDong: 'Thanh lý', NghiepVu: 'liquidation' });
+    councils.push({ MaHoiDong: 4, TenHoiDong: 'Hội đồng thanh lý', MaLoaiHoiDong: 4 });
+    members.push({ MaHoiDong: 4, TaiKhoan: 'lecturer01' });
+
+    const requests: any[] = [
+      {
+        Id: 1018,
+        MaDT: 'DT01',
+        MaLoaiHoiDong: 4,
+        MaHoiDong: null,
+        TrangThai: 'Chờ duyệt',
+        MaBaoCaoTienDo: 25,
+        TaiKhoanNguoiGui: 'chairman01',
+        DeTai: { MaDT: 'DT01', TenDT: 'Đề tài 1' },
+        LoaiHoiDong: { MaLoaiHoiDong: 4, TenLoaiHoiDong: 'Thanh lý', NghiepVu: 'liquidation' },
+      },
+    ];
+
+    (service as any).requestRepository.findOne = jest.fn(async ({ where }: any) =>
+      requests.find((r) => r.Id === where.Id) ?? null,
+    );
+    (service as any).requestRepository.save = jest.fn(async (data: any) => data);
+    (service as any).progressReportRepository.findOne = jest.fn(async () => ({
+      Id: 25,
+      MaDT: 'DT01',
+      LoaiBaoCao: 'Định kỳ',
+      KyBaoCao: 'Quý 1 2026',
+    }));
+    (service as any).projectRepository.save = jest.fn(async (data: any) => data);
+    (service as any).legacyApprovalRepository.findOne = jest.fn(async () => null);
+    (service as any).legacyApprovalRepository.create = jest.fn((data: any) => data);
+    (service as any).legacyApprovalRepository.save = jest.fn(async (data: any) => data);
+
+    const res = await service.approveAssignmentRequest(1018, 4, 'admin');
+    expect(res).toBeDefined();
+    expect(requests[0].TrangThai).toBe('Đã chấp nhận');
+    expect(requests[0].MaHoiDong).toBe(4);
+  });
 });

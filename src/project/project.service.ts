@@ -318,7 +318,7 @@ export class ProjectService {
 
   async lookupProjects(query: AdminProjectQueryDto) {
     if (!query.keyword?.trim()) {
-      throw new BadRequestException('Vui lòng nhập tên đề tài để tra cứu');
+      throw new BadRequestException('Vui lòng nhập từ khóa để tra cứu');
     }
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
@@ -342,10 +342,24 @@ export class ProjectService {
       .take(limit);
 
     if (query.keyword?.trim()) {
-      builder.andWhere(
-        'project.TenDT LIKE :keyword',
-        { keyword: `%${query.keyword.trim()}%` },
-      );
+      const keyword = query.keyword.trim();
+      if (query.searchType === 'content') {
+        builder.andWhere(
+          'CAST(project.MoTa AS NVARCHAR(MAX)) LIKE :keyword',
+          { keyword: `%${keyword}%` },
+        );
+      } else if (query.searchType === 'name') {
+        builder.andWhere(
+          '(project.TenDT LIKE :keyword OR project.MaDT LIKE :keyword)',
+          { keyword: `%${keyword}%` },
+        );
+      } else {
+        // Mặc định hoặc 'all': Tìm kiếm theo cả tên đề tài, nội dung mô tả và mã đề tài
+        builder.andWhere(
+          '(project.TenDT LIKE :keyword OR CAST(project.MoTa AS NVARCHAR(MAX)) LIKE :keyword OR project.MaDT LIKE :keyword)',
+          { keyword: `%${keyword}%` },
+        );
+      }
     }
     if (query.trangThai?.trim()) {
       builder.andWhere('project.TrangThai = :trangThai', { trangThai: query.trangThai.trim() });

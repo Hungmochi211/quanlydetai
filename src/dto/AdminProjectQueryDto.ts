@@ -8,6 +8,11 @@ export class AdminProjectQueryDto {
   @IsString()
   keyword?: string;
 
+  @ApiProperty({ required: false, example: 'all', enum: ['all', 'name', 'content'] })
+  @IsOptional()
+  @IsString()
+  searchType?: 'all' | 'name' | 'content';
+
   @ApiProperty({ required: false, example: 'NCKH' })
   @IsOptional()
   @IsString()

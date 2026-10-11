@@ -57,11 +57,18 @@ export class AdminUsersService {
     });
     if (existing) throw new BadRequestException('Tài khoản đã tồn tại');
 
+    const trimmedFullName = data.TenDayDu?.trim();
+    const trimmedEmail = data.Gmail?.trim()?.toLowerCase();
+    const isCompleted = Boolean(trimmedFullName && trimmedEmail);
+
     const user = this.userRepository.create({
       TaiKhoan: data.TaiKhoan.trim(),
       MatKhau: await bcrypt.hash(data.MatKhau, 10),
       VaiTro: data.VaiTro,
-      DaHoanThienHoSo: false,
+      TenDayDu: trimmedFullName || undefined,
+      Gmail: trimmedEmail || undefined,
+      SDT: data.SDT ? data.SDT.trim() : undefined,
+      DaHoanThienHoSo: isCompleted,
     });
     await this.userRepository.save(user);
     return this.findOne(user.TaiKhoan);
@@ -69,13 +76,23 @@ export class AdminUsersService {
 
   async update(taiKhoan: string, data: AdminUpdateUserDto, currentAdmin: string) {
     await this.ensureNotRemovingOwnAdminRole(taiKhoan, data.VaiTro, currentAdmin);
-    await this.findOne(taiKhoan);
+    const existing = await this.findOne(taiKhoan);
+
+    const nextFullName = data.TenDayDu !== undefined ? data.TenDayDu?.trim() : existing.TenDayDu?.trim();
+    const nextEmail = data.Gmail !== undefined ? data.Gmail?.trim() : existing.Gmail?.trim();
+    const autoCompleted = Boolean(nextFullName && nextEmail);
+    const daHoanThienHoSo =
+      data.DaHoanThienHoSo !== undefined
+        ? data.DaHoanThienHoSo
+        : (autoCompleted || existing.DaHoanThienHoSo);
+
     const updateData = Object.fromEntries(
       Object.entries({
         Gmail: data.Gmail?.trim(),
         TenDayDu: data.TenDayDu?.trim(),
         VaiTro: data.VaiTro,
-        SDT: data.SDT,
+        SDT: data.SDT !== undefined ? (data.SDT.trim() || null) : undefined,
+        DaHoanThienHoSo: daHoanThienHoSo,
       }).filter(([, value]) => value !== undefined),
     );
     await this.userRepository.update({ TaiKhoan: taiKhoan }, updateData);

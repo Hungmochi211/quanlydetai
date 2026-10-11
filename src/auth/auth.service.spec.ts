@@ -7,7 +7,7 @@ describe('AuthService', () => {
     TaiKhoan: 'student01',
     TenDayDu: 'Nguyễn Văn A',
     VaiTro: 'Sinh viên',
-    SDT: 123456789,
+    SDT: '0123456789',
     Gmail: 'student01@example.com',
     DaHoanThienHoSo: true,
     MatKhau: '',
@@ -23,6 +23,8 @@ describe('AuthService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     user.DaHoanThienHoSo = true;
+    user.TenDayDu = 'Nguyễn Văn A';
+    user.Gmail = 'student01@example.com';
     user.MatKhau = await bcrypt.hash('CorrectPassword1!', 4);
     userService.findOne.mockResolvedValue(user);
     userRepository.findOne.mockResolvedValue(user);
@@ -48,6 +50,8 @@ describe('AuthService', () => {
 
   it('yêu cầu hoàn thiện hồ sơ khi tài khoản do Admin mới cấp đăng nhập lần đầu', async () => {
     user.DaHoanThienHoSo = false;
+    user.TenDayDu = '';
+    user.Gmail = '';
 
     await expect(service.signIn('student01', 'CorrectPassword1!')).resolves.toEqual({
       access_token: 'access-token',
@@ -55,11 +59,22 @@ describe('AuthService', () => {
     });
   });
 
+  it('không yêu cầu hoàn thiện hồ sơ nếu Admin đã điền sẵn thông tin họ tên và email', async () => {
+    user.DaHoanThienHoSo = false;
+    user.TenDayDu = 'Nguyễn Văn A';
+    user.Gmail = 'student01@example.com';
+
+    await expect(service.signIn('student01', 'CorrectPassword1!')).resolves.toEqual({
+      access_token: 'access-token',
+      requiresProfileCompletion: false,
+    });
+  });
+
   it('đánh dấu hoàn thiện hồ sơ sau khi người dùng cập nhật thông tin', async () => {
     await service.updateProfile('student01', {
       TenDayDu: 'Nguyễn Văn A',
       Gmail: 'student01@example.com',
-      SDT: 912345678,
+      SDT: '0912345678',
     });
 
     expect(userRepository.update).toHaveBeenCalledWith(

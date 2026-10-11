@@ -1,16 +1,19 @@
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  IsBoolean,
   IsEmail,
   IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 
 export const SYSTEM_ROLES = [
@@ -41,6 +44,25 @@ export class AdminCreateUserDto {
   @ApiProperty({ enum: SYSTEM_ROLES, example: 'Giảng viên' })
   @IsIn(SYSTEM_ROLES, { message: 'Vai trò không hợp lệ' })
   VaiTro!: (typeof SYSTEM_ROLES)[number];
+
+  @ApiProperty({ required: false, example: 'Nguyễn Văn A' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  TenDayDu?: string;
+
+  @ApiProperty({ required: false, example: 'giangvien@vnua.edu.vn' })
+  @IsOptional()
+  @IsEmail({}, { message: 'Email không hợp lệ' })
+  @MaxLength(100)
+  Gmail?: string;
+
+  @ApiProperty({ required: false, example: '0912345678' })
+  @IsOptional()
+  @ValidateIf((o) => o.SDT !== undefined && o.SDT !== null && o.SDT !== '')
+  @IsString()
+  @Matches(/^0\d{9}$/, { message: 'Số điện thoại phải gồm đúng 10 chữ số và bắt đầu bằng số 0' })
+  SDT?: string;
 }
 
 export class AdminUpdateUserDto {
@@ -61,11 +83,17 @@ export class AdminUpdateUserDto {
   @IsIn(SYSTEM_ROLES, { message: 'Vai trò không hợp lệ' })
   VaiTro?: (typeof SYSTEM_ROLES)[number];
 
-  @ApiProperty({ required: false, example: 912345678 })
+  @ApiProperty({ required: false, example: '0912345678' })
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  SDT?: number;
+  @ValidateIf((o) => o.SDT !== undefined && o.SDT !== null && o.SDT !== '')
+  @IsString()
+  @Matches(/^0\d{9}$/, { message: 'Số điện thoại phải gồm đúng 10 chữ số và bắt đầu bằng số 0' })
+  SDT?: string;
+
+  @ApiProperty({ required: false, example: true })
+  @IsOptional()
+  @IsBoolean()
+  DaHoanThienHoSo?: boolean;
 }
 
 export class AdminResetPasswordDto {

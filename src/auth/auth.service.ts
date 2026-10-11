@@ -29,22 +29,32 @@ export class AuthService {
     MatKhau: string,
   ): Promise<{ access_token: string; requiresProfileCompletion: boolean }> {
     const user = await this.userService.findOne(TaiKhoan);
-    if (!user) throw new UnauthorizedException('Sai tài khoản');
+    if (!user) throw new UnauthorizedException('Tài khoản hoặc mật khẩu không chính xác');
     const checkPass = await bcrypt.compare(MatKhau, user.MatKhau);
     if (!checkPass) {
-      throw new UnauthorizedException('Sai mật khẩu hoặc tài khoản');
+      throw new UnauthorizedException('Tài khoản hoặc mật khẩu không chính xác');
     }
+
+    const hasCompletedProfile = Boolean(
+      user.DaHoanThienHoSo || (user.TenDayDu?.trim() && user.Gmail?.trim())
+    );
+
+    if (!user.DaHoanThienHoSo && hasCompletedProfile) {
+      user.DaHoanThienHoSo = true;
+      await this.userRes.update({ TaiKhoan: user.TaiKhoan }, { DaHoanThienHoSo: true });
+    }
+
     const payload = {
       TaiKhoan: user.TaiKhoan,
       TenDayDu: user.TenDayDu,
       VaiTro: user.VaiTro,
       SDT: user.SDT,
       Gmail: user.Gmail,
-      DaHoanThienHoSo: user.DaHoanThienHoSo,
+      DaHoanThienHoSo: hasCompletedProfile,
     };
     return {
       access_token: await this.jwtService.signAsync(payload),
-      requiresProfileCompletion: !user.DaHoanThienHoSo,
+      requiresProfileCompletion: !hasCompletedProfile,
     };
   }
 
@@ -198,7 +208,7 @@ export class AuthService {
       Object.entries({
         TenDayDu: data.TenDayDu,
         Gmail: data.Gmail,
-        SDT: data.SDT,
+        SDT: typeof data.SDT === 'string' ? data.SDT.trim() : data.SDT,
         Avatar: data.Avatar,
       }).filter(([, value]) => value !== undefined),
     );
@@ -208,7 +218,24 @@ export class AuthService {
       { ...allowedData, DaHoanThienHoSo: true },
     );
 
-    return { message: 'Cập nhật thành công' };
+    const updatedUser = await this.userRes.findOne({ where: { TaiKhoan } });
+    let access_token: string | undefined;
+    if (updatedUser) {
+      const payload = {
+        TaiKhoan: updatedUser.TaiKhoan,
+        TenDayDu: updatedUser.TenDayDu,
+        VaiTro: updatedUser.VaiTro,
+        SDT: updatedUser.SDT,
+        Gmail: updatedUser.Gmail,
+        DaHoanThienHoSo: true,
+      };
+      access_token = await this.jwtService.signAsync(payload);
+    }
+
+    return {
+      message: 'Cập nhật thành công',
+      access_token,
+    };
   }
 
   private deleteAvatarFile(avatarPath?: string) {

@@ -12,6 +12,7 @@ import { PhanLoai } from 'src/entity/speclist.entity';
 import { HoiDongDeTai, ThanhVienHoiDong } from 'src/entity/council.entity';
 import { MocDeTai } from 'src/entity/progress.entity';
 import { XetDuyetDeTai } from 'src/entity/project-approval.entity';
+import { HoSoNghiemThu, PhieuChamNghiemThu } from 'src/entity/acceptance.entity';
 
 type ReportTopic = Pick<DeTai, 'MaDT' | 'TenDT' | 'Khoa' | 'TrangThai' | 'TienDo' | 'NgayKetThuc'>;
 
@@ -25,6 +26,8 @@ export class StatisticsService {
     @InjectRepository(HoiDongDeTai) private readonly councilAssignmentRepository: Repository<HoiDongDeTai>,
     @InjectRepository(MocDeTai) private readonly milestoneRepository: Repository<MocDeTai>,
     @InjectRepository(XetDuyetDeTai) private readonly approvalRepository: Repository<XetDuyetDeTai>,
+    @InjectRepository(HoSoNghiemThu) private readonly dossierRepository: Repository<HoSoNghiemThu>,
+    @InjectRepository(PhieuChamNghiemThu) private readonly scoreRepository: Repository<PhieuChamNghiemThu>,
   ) {}
 
   private applyFilters(builder: SelectQueryBuilder<DeTai>, query: StatisticsQueryDto) {
@@ -331,7 +334,7 @@ export class StatisticsService {
     const councilIds = councilMembers.map((m) => m.MaHoiDong);
     if (!councilIds.length) {
       return {
-        overview: { totalTopics: 0, pending: 0, approved: 0 },
+        overview: { totalTopics: 0, pending: 0, approved: 0, rejected: 0 },
         topics: [],
       };
     }
@@ -345,11 +348,11 @@ export class StatisticsService {
       ...new Map(
         assignments
           .filter((a) => a.DeTai)
-          .map((a) => [a.MaDT, a]),
+          .map((a) => [`${a.MaDT}_${a.MaHoiDong}`, a]),
       ).values(),
     ];
 
-    const projectCodes = uniqueAssignments.map((a) => a.MaDT);
+    const projectCodes = [...new Set(uniqueAssignments.map((a) => a.MaDT))];
     const myApprovals = projectCodes.length
       ? await this.approvalRepository.find({
           where: {
@@ -359,55 +362,19 @@ export class StatisticsService {
         })
       : [];
 
+    const dossiers = projectCodes.length
+      ? await this.dossierRepository.find({
+          where: {
+            MaDT: In(projectCodes),
+          },
+          relations: ['PhieuCham'],
+        })
+      : [];
+
     const topics = uniqueAssignments.map((assignment) => {
       const project = assignment.DeTai;
-      const statusNormalized = (project.TrangThai || '').toLowerCase();
-      const myApproval = myApprovals.find((app) => app.MaDT === assignment.MaDT);
-
-      let status: 'pending' | 'approved' | 'rejected' = 'pending';
-
-      // Ưu tiên 1: Kết quả phê duyệt / phản hồi của chính thành viên hội đồng này
-      if (myApproval) {
-        if (myApproval.TrangThai === 'Đã phê duyệt') {
-          status = 'approved';
-        } else if (myApproval.TrangThai === 'Từ chối') {
-          status = 'rejected';
-        } else {
-          status = 'pending';
-        }
-      } else {
-        // Ưu tiên 2: Xét theo trạng thái chung của đề tài
-        if (
-          statusNormalized.includes('từ chối') ||
-          statusNormalized.includes('không đạt') ||
-          statusNormalized.includes('hủy')
-        ) {
-          status = 'rejected';
-        } else if (
-          statusNormalized.includes('phê duyệt') ||
-          statusNormalized.includes('hoàn thành') ||
-          statusNormalized.includes('nghiệm thu') ||
-          statusNormalized.includes('đạt') ||
-          statusNormalized.includes('thanh lý') // Đã thanh lý
-        ) {
-          if (statusNormalized === 'chờ thanh lý') {
-            status = 'pending';
-          } else {
-            status = 'approved';
-          }
-        } else {
-          status = 'pending';
-        }
-      }
-
-      // Nếu đề tài đã ở trạng thái cuối ("Đã thanh lý", "Đã nghiệm thu", "Hoàn thành") thì luôn xem là đã xử lý/phê duyệt
-      if (
-        statusNormalized === 'đã thanh lý' ||
-        statusNormalized === 'đã nghiệm thu' ||
-        statusNormalized === 'hoàn thành'
-      ) {
-        status = 'approved';
-      }
+      const projectStatus = (project.TrangThai || '').trim();
+      const statusNormalized = projectStatus.toLowerCase();
 
       const councilTypeName =
         assignment.LoaiHoiDong?.TenLoaiHoiDong ||
@@ -415,19 +382,173 @@ export class StatisticsService {
         assignment.HoiDong?.TenHoiDong ||
         'Hội đồng chuyên môn';
 
+      const nghiepVu = (
+        assignment.LoaiHoiDong?.NghiepVu ||
+        assignment.HoiDong?.LoaiHoiDong?.NghiepVu ||
+        ''
+      ).toLowerCase();
+
+      const councilNameLower = councilTypeName.toLowerCase();
+      const isAcceptanceCouncil = nghiepVu === 'scoring' || councilNameLower.includes('nghiệm thu');
+      const isApprovalCouncil = nghiepVu === 'approval' || councilNameLower.includes('xét duyệt');
+      const isMonitoringCouncil = nghiepVu === 'monitoring' || councilNameLower.includes('theo dõi');
+      const isLiquidationCouncil = nghiepVu === 'liquidation' || councilNameLower.includes('thanh lý');
+
+      let status: 'pending' | 'approved' | 'rejected' = 'pending';
+      let statusText = 'Chờ xử lý';
+      let submittedDate = (project.NgayTao || assignment.NgayPhanCong || new Date()).toISOString();
+      let processedDate: string | null = null;
+
+      if (isAcceptanceCouncil) {
+        const dossier = dossiers.find((d) => d.MaDT === assignment.MaDT);
+        const myScore = dossier?.PhieuCham?.find((p) => p.TaiKhoanHoiDong === account);
+
+        if (dossier?.NgayGui) {
+          submittedDate = new Date(dossier.NgayGui).toISOString();
+        }
+
+        const dossierStatus = (dossier?.TrangThai || '').toLowerCase();
+        const finalResult = (dossier?.KetQuaCuoiCung || '').toLowerCase();
+
+        // 1. Đã hoàn thành nghiệm thu (đạt)
+        if (
+          statusNormalized.includes('đã nghiệm thu') ||
+          dossierStatus === 'đã chốt' ||
+          finalResult === 'đạt'
+        ) {
+          status = 'approved';
+          statusText = 'Đã nghiệm thu';
+          processedDate = dossier?.NgayChot
+            ? new Date(dossier.NgayChot).toISOString()
+            : myScore?.NgayGui
+            ? new Date(myScore.NgayGui).toISOString()
+            : project.NgayKetThuc
+            ? new Date(project.NgayKetThuc).toISOString()
+            : null;
+        }
+        // 2. Không đạt nghiệm thu
+        else if (
+          statusNormalized.includes('không đạt') ||
+          dossierStatus === 'không đạt' ||
+          finalResult === 'không đạt'
+        ) {
+          status = 'rejected';
+          statusText = 'Không đạt';
+          processedDate = dossier?.NgayChot
+            ? new Date(dossier.NgayChot).toISOString()
+            : myScore?.NgayGui
+            ? new Date(myScore.NgayGui).toISOString()
+            : null;
+        }
+        // 3. Đang trong giai đoạn nghiệm thu / đang chấm điểm
+        else if (
+          statusNormalized.includes('đang nghiệm thu') ||
+          dossierStatus === 'đang chấm'
+        ) {
+          if (myScore && myScore.TrangThai === 'Đã gửi') {
+            status = 'approved';
+            statusText = 'Đang nghiệm thu';
+            processedDate = myScore.NgayGui ? new Date(myScore.NgayGui).toISOString() : null;
+          } else {
+            status = 'pending';
+            statusText = 'Chờ chấm điểm';
+            processedDate = null;
+          }
+        }
+        // 4. Chờ nghiệm thu / hồ sơ nháp
+        else {
+          status = 'pending';
+          statusText = 'Chờ nghiệm thu';
+          processedDate = null;
+        }
+      } else if (isApprovalCouncil) {
+        const myApproval = myApprovals.find((app) => app.MaDT === assignment.MaDT);
+        if (myApproval) {
+          if (myApproval.TrangThai === 'Đã phê duyệt') {
+            status = 'approved';
+            statusText = 'Đã phê duyệt';
+            processedDate = myApproval.NgayPhanHoi ? new Date(myApproval.NgayPhanHoi).toISOString() : null;
+          } else if (myApproval.TrangThai === 'Từ chối') {
+            status = 'rejected';
+            statusText = 'Từ chối';
+            processedDate = myApproval.NgayPhanHoi ? new Date(myApproval.NgayPhanHoi).toISOString() : null;
+          } else {
+            status = 'pending';
+            statusText = 'Chờ phê duyệt';
+            processedDate = null;
+          }
+        } else {
+          if (statusNormalized.includes('từ chối') || statusNormalized.includes('hủy')) {
+            status = 'rejected';
+            statusText = 'Từ chối';
+          } else if (
+            statusNormalized.includes('phê duyệt') ||
+            statusNormalized.includes('đang thực hiện') ||
+            statusNormalized.includes('nghiệm thu') ||
+            statusNormalized.includes('thanh lý')
+          ) {
+            status = 'approved';
+            statusText = 'Đã phê duyệt';
+            processedDate = project.NgayXetDuyet ? new Date(project.NgayXetDuyet).toISOString() : null;
+          } else {
+            status = 'pending';
+            statusText = 'Chờ phê duyệt';
+          }
+        }
+      } else if (isMonitoringCouncil) {
+        if (
+          statusNormalized.includes('hoàn thành') ||
+          statusNormalized.includes('đã nghiệm thu') ||
+          statusNormalized.includes('thanh lý')
+        ) {
+          status = 'approved';
+          statusText = 'Hoàn thành';
+          processedDate = project.NgayKetThuc ? new Date(project.NgayKetThuc).toISOString() : null;
+        } else {
+          status = 'pending';
+          statusText = 'Đang theo dõi';
+        }
+      } else if (isLiquidationCouncil) {
+        if (statusNormalized.includes('đã thanh lý')) {
+          status = 'approved';
+          statusText = 'Đã thanh lý';
+          processedDate = project.NgayKetThuc ? new Date(project.NgayKetThuc).toISOString() : null;
+        } else {
+          status = 'pending';
+          statusText = 'Chờ thanh lý';
+        }
+      } else {
+        // Fallback chung
+        if (
+          statusNormalized.includes('từ chối') ||
+          statusNormalized.includes('không đạt') ||
+          statusNormalized.includes('hủy')
+        ) {
+          status = 'rejected';
+          statusText = projectStatus || 'Từ chối';
+        } else if (
+          statusNormalized.includes('đã') ||
+          statusNormalized.includes('hoàn thành') ||
+          statusNormalized.includes('đạt')
+        ) {
+          status = 'approved';
+          statusText = projectStatus || 'Đã xử lý';
+          processedDate = project.NgayKetThuc ? new Date(project.NgayKetThuc).toISOString() : null;
+        } else {
+          status = 'pending';
+          statusText = projectStatus || 'Chờ xử lý';
+        }
+      }
+
       return {
         id: project.MaDT,
+        uniqueKey: `${project.MaDT}_${assignment.MaHoiDong}`,
         topicName: project.TenDT,
         status,
+        statusText,
         councilTypeName,
-        submittedDate: (project.NgayTao || assignment.NgayPhanCong || new Date()).toISOString(),
-        processedDate: myApproval?.NgayPhanHoi
-          ? new Date(myApproval.NgayPhanHoi).toISOString()
-          : project.NgayXetDuyet
-          ? new Date(project.NgayXetDuyet).toISOString()
-          : status !== 'pending' && project.NgayKetThuc
-          ? new Date(project.NgayKetThuc).toISOString()
-          : null,
+        submittedDate,
+        processedDate,
       };
     });
 
@@ -435,6 +556,7 @@ export class StatisticsService {
       totalTopics: topics.length,
       pending: topics.filter((t) => t.status === 'pending').length,
       approved: topics.filter((t) => t.status === 'approved').length,
+      rejected: topics.filter((t) => t.status === 'rejected').length,
     };
 
     return { overview, topics };
@@ -447,7 +569,7 @@ export class StatisticsService {
     return this.exportCouncilDocx(data);
   }
 
-  private async exportCouncilExcel(data: { overview: { totalTopics: number; pending: number; approved: number }; topics: any[] }) {
+  private async exportCouncilExcel(data: { overview: { totalTopics: number; pending: number; approved: number; rejected?: number }; topics: any[] }) {
     const workbook = new ExcelJS.Workbook();
     const summary = workbook.addWorksheet('Tổng quan');
     summary.addRow(['BÁO CÁO THỐNG KÊ ĐỀ TÀI HỘI ĐỒNG']);
@@ -455,8 +577,9 @@ export class StatisticsService {
     summary.getCell('A1').font = { bold: true, size: 16 };
     summary.addRows([
       ['Tổng đề tài', data.overview.totalTopics],
-      ['Chờ phê duyệt', data.overview.pending],
-      ['Đã phê duyệt', data.overview.approved],
+      ['Chờ xử lý', data.overview.pending],
+      ['Đã hoàn thành / Đạt', data.overview.approved],
+      ['Từ chối / Không đạt', data.overview.rejected || 0],
     ]);
     summary.columns = [{ width: 24 }, { width: 18 }];
 
@@ -465,20 +588,20 @@ export class StatisticsService {
       { header: 'Mã đề tài', key: 'id', width: 18 },
       { header: 'Tên đề tài', key: 'topicName', width: 45 },
       { header: 'Loại hội đồng', key: 'councilTypeName', width: 24 },
-      { header: 'Trạng thái', key: 'status', width: 20 },
+      { header: 'Trạng thái', key: 'status', width: 22 },
       { header: 'Ngày gửi', key: 'submittedDate', width: 16 },
       { header: 'Ngày xử lý', key: 'processedDate', width: 16 },
     ];
     list.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
     list.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A6E3C' } };
 
-    const statusMap = { pending: 'Chờ phê duyệt', approved: 'Đã phê duyệt', rejected: 'Từ chối' };
+    const statusMap = { pending: 'Chờ xử lý', approved: 'Đã hoàn thành', rejected: 'Từ chối' };
     data.topics.forEach((t) => {
       list.addRow({
         id: t.id,
         topicName: t.topicName,
         councilTypeName: t.councilTypeName,
-        status: statusMap[t.status as 'pending' | 'approved' | 'rejected'] || t.status,
+        status: t.statusText || statusMap[t.status as 'pending' | 'approved' | 'rejected'] || t.status,
         submittedDate: t.submittedDate ? new Date(t.submittedDate).toLocaleDateString('vi-VN') : '',
         processedDate: t.processedDate ? new Date(t.processedDate).toLocaleDateString('vi-VN') : '—',
       });
@@ -491,7 +614,7 @@ export class StatisticsService {
     };
   }
 
-  private exportCouncilPdf(data: { overview: { totalTopics: number; pending: number; approved: number }; topics: any[] }) {
+  private exportCouncilPdf(data: { overview: { totalTopics: number; pending: number; approved: number; rejected?: number }; topics: any[] }) {
     return new Promise<{ buffer: Buffer; contentType: string; fileName: string }>((resolve) => {
       const document = new PDFDocument({ margin: 40 });
       const chunks: Buffer[] = [];
@@ -507,21 +630,21 @@ export class StatisticsService {
       if (fontPath && existsSync(fontPath)) document.font(fontPath);
       document.fontSize(18).text('BÁO CÁO THỐNG KÊ ĐỀ TÀI HỘI ĐỒNG', { align: 'center' }).moveDown();
       document.fontSize(11).text(
-        `Tổng đề tài: ${data.overview.totalTopics} | Chờ phê duyệt: ${data.overview.pending} | Đã phê duyệt: ${data.overview.approved}`,
+        `Tổng đề tài: ${data.overview.totalTopics} | Chờ xử lý: ${data.overview.pending} | Đã hoàn thành: ${data.overview.approved} | Không đạt / Từ chối: ${data.overview.rejected || 0}`,
       ).moveDown();
-      const statusMap = { pending: 'Chờ phê duyệt', approved: 'Đã phê duyệt', rejected: 'Từ chối' };
+      const statusMap = { pending: 'Chờ xử lý', approved: 'Đã hoàn thành', rejected: 'Từ chối' };
       data.topics.forEach((t) =>
         document.text(
-          `${t.id} | ${t.topicName} | ${t.councilTypeName} | ${statusMap[t.status as 'pending' | 'approved' | 'rejected'] || t.status}`,
+          `${t.id} | ${t.topicName} | ${t.councilTypeName} | ${t.statusText || statusMap[t.status as 'pending' | 'approved' | 'rejected'] || t.status}`,
         ),
       );
       document.end();
     });
   }
 
-  private async exportCouncilDocx(data: { overview: { totalTopics: number; pending: number; approved: number }; topics: any[] }) {
-    const statusMap = { pending: 'Chờ phê duyệt', approved: 'Đã phê duyệt', rejected: 'Từ chối' };
-    const header = ['Mã đề tài', 'Tên đề tài', 'Loại hội đồng', 'Trạng thái', 'Ngày gửi'];
+  private async exportCouncilDocx(data: { overview: { totalTopics: number; pending: number; approved: number; rejected?: number }; topics: any[] }) {
+    const statusMap = { pending: 'Chờ xử lý', approved: 'Đã hoàn thành', rejected: 'Từ chối' };
+    const header = ['Mã đề tài', 'Tên đề tài', 'Loại hội đồng', 'Trạng thái', 'Ngày gửi', 'Ngày xử lý'];
     const table = new Table({
       rows: [
         new TableRow({
@@ -536,8 +659,9 @@ export class StatisticsService {
                 t.id,
                 t.topicName,
                 t.councilTypeName,
-                statusMap[t.status as 'pending' | 'approved' | 'rejected'] || t.status,
+                t.statusText || statusMap[t.status as 'pending' | 'approved' | 'rejected'] || t.status,
                 t.submittedDate ? new Date(t.submittedDate).toLocaleDateString('vi-VN') : '',
+                t.processedDate ? new Date(t.processedDate).toLocaleDateString('vi-VN') : '—',
               ].map((value) => new TableCell({ children: [new Paragraph(value)] })),
             }),
         ),
@@ -550,7 +674,7 @@ export class StatisticsService {
           children: [
             new Paragraph({ text: 'BÁO CÁO THỐNG KÊ ĐỀ TÀI HỘI ĐỒNG', heading: HeadingLevel.TITLE }),
             new Paragraph(
-              `Tổng đề tài: ${data.overview.totalTopics} | Chờ phê duyệt: ${data.overview.pending} | Đã phê duyệt: ${data.overview.approved}`,
+              `Tổng đề tài: ${data.overview.totalTopics} | Chờ xử lý: ${data.overview.pending} | Đã hoàn thành: ${data.overview.approved} | Không đạt / Từ chối: ${data.overview.rejected || 0}`,
             ),
             table,
           ],

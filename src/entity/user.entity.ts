@@ -26,8 +26,8 @@ export class NguoiDung {
   @Column({ type: 'nvarchar', length: 500, nullable: true })
   Avatar?: string;
 
-  @Column({ type: 'int', nullable: true })
-  SDT!: number;
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  SDT?: string;
 
   @Column({ type: 'varchar', nullable: true })
   ResetToken!: string;

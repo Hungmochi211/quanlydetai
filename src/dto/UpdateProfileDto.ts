@@ -1,5 +1,4 @@
-import { Type } from 'class-transformer';
-import { IsEmail, IsInt, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsEmail, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 /** Các trường người dùng được phép tự cập nhật. */
@@ -16,11 +15,11 @@ export class UpdateProfileDto {
   @MaxLength(100)
   Gmail?: string;
 
-  @ApiProperty({ required: false, example: 912345678 })
+  @ApiProperty({ required: false, example: '0912345678' })
   @IsOptional()
-  @Type(() => Number)
-  @IsInt({ message: 'Số điện thoại không hợp lệ' })
-  SDT?: number;
+  @IsString()
+  @Matches(/^[0-9+]{9,15}$/, { message: 'Số điện thoại không hợp lệ' })
+  SDT?: string;
 
   @ApiProperty({ required: false, example: '/private-uploads/avatars/user-123.jpg' })
   @IsOptional()

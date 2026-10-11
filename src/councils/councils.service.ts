@@ -80,14 +80,16 @@ export class CouncilsService {
 
   async create(dto: CreateCouncilDto) {
     await this.findType(dto.MaLoaiHoiDong);
-    this.validateMeetingDetails(dto.HinhThucHop, dto.DiaDiem, dto.LinkHop);
+    if (dto.HinhThucHop) {
+      this.validateMeetingDetails(dto.HinhThucHop, dto.DiaDiem, dto.LinkHop);
+    }
     const council = this.councilRepository.create({
       TenHoiDong: dto.TenHoiDong.trim(),
       MaLoaiHoiDong: dto.MaLoaiHoiDong,
       MoTa: dto.MoTa?.trim() || undefined,
       LaHoiDongMacDinh: dto.LaHoiDongMacDinh ?? false,
-      ThoiGianHop: dto.ThoiGianHop ? new Date(dto.ThoiGianHop) : undefined,
-      HinhThucHop: dto.HinhThucHop,
+      ThoiGianHop: dto.HinhThucHop && dto.ThoiGianHop ? new Date(dto.ThoiGianHop) : undefined,
+      HinhThucHop: dto.HinhThucHop || undefined,
       DiaDiem: dto.HinhThucHop === 'offline' ? dto.DiaDiem?.trim() || undefined : undefined,
       LinkHop: dto.HinhThucHop === 'online' ? dto.LinkHop?.trim() || undefined : undefined,
     });
@@ -98,7 +100,8 @@ export class CouncilsService {
   async update(id: number, dto: UpdateCouncilDto) {
     const currentCouncil = await this.findOne(id);
     if (dto.MaLoaiHoiDong !== undefined) await this.findType(dto.MaLoaiHoiDong);
-    const meetingType = dto.HinhThucHop ?? currentCouncil.HinhThucHop;
+    const hasMeetingUpdate = dto.HinhThucHop !== undefined;
+    const meetingType = hasMeetingUpdate ? dto.HinhThucHop : currentCouncil.HinhThucHop;
     const location = dto.DiaDiem ?? currentCouncil.DiaDiem;
     const meetingLink = dto.LinkHop ?? currentCouncil.LinkHop;
     if (meetingType) {
@@ -112,7 +115,8 @@ export class CouncilsService {
         ...(dto.MoTa !== undefined ? { MoTa: dto.MoTa.trim() || null } : {}),
         ...(dto.LaHoiDongMacDinh !== undefined ? { LaHoiDongMacDinh: dto.LaHoiDongMacDinh } : {}),
         ...(dto.ThoiGianHop !== undefined ? { ThoiGianHop: dto.ThoiGianHop ? new Date(dto.ThoiGianHop) : null } : {}),
-        ...(dto.HinhThucHop !== undefined ? { HinhThucHop: dto.HinhThucHop } : {}),
+        ...(dto.HinhThucHop !== undefined ? { HinhThucHop: dto.HinhThucHop || null } : {}),
+        ...(dto.HinhThucHop === null ? { DiaDiem: null, LinkHop: null, ThoiGianHop: null, HinhThucHop: null } : {}),
         ...(meetingType === 'offline' ? { DiaDiem: (dto.DiaDiem ?? currentCouncil.DiaDiem)?.trim() || null, LinkHop: null } : {}),
         ...(meetingType === 'online' ? { LinkHop: (dto.LinkHop ?? currentCouncil.LinkHop)?.trim() || null, DiaDiem: null } : {}),
       },

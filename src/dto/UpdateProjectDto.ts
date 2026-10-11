@@ -19,4 +19,9 @@ export class UpdateProjectDto {
   @ApiPropertyOptional()
   MoTa?: string;
 
+  @ApiPropertyOptional()
+  NgayBatDau?: string | Date;
+
+  @ApiPropertyOptional()
+  NgayKetThuc?: string | Date;
 }

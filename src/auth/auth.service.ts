@@ -10,7 +10,7 @@ import { UserService } from 'src/user/user.service';
 import bcrypt from 'bcrypt';
 import { existsSync, unlinkSync } from 'fs';
 import { join } from 'path';
-import { sendMail } from './gmail';
+import { sendMail, sendVerificationEmail } from './gmail';
 import { AVATAR_UPLOAD_DIR } from './avatar-multer.config';
 
 @Injectable()
@@ -48,16 +48,85 @@ export class AuthService {
     };
   }
 
+  private verificationCodes = new Map<string, { code: string; expiresAt: number }>();
+
+  async sendVerificationCode(gmail: string, taiKhoan?: string) {
+    if (!gmail || !gmail.trim()) {
+      throw new BadRequestException('Vui lòng nhập địa chỉ Gmail');
+    }
+    const normalizedEmail = gmail.trim().toLowerCase();
+
+    // Kiểm tra trùng Gmail trong hệ thống
+    const existingEmail = await this.userRes.findOne({
+      where: { Gmail: normalizedEmail },
+    });
+    if (existingEmail) {
+      throw new BadRequestException('Gmail này đã được sử dụng bởi một tài khoản khác');
+    }
+
+    // Nếu có truyền kèm tài khoản, kiểm tra trùng tài khoản luôn
+    if (taiKhoan && taiKhoan.trim()) {
+      const existingUser = await this.userService.findOne(taiKhoan.trim());
+      if (existingUser) {
+        throw new BadRequestException('Tài khoản này đã tồn tại');
+      }
+    }
+
+    // Tạo mã ngẫu nhiên 6 chữ số
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 phút
+
+    this.verificationCodes.set(normalizedEmail, { code, expiresAt });
+
+    try {
+      await sendVerificationEmail(
+        normalizedEmail,
+        code,
+        this.configService.getOrThrow<string>('MAIL_USER'),
+        this.configService.getOrThrow<string>('MAIL_PASSWORD'),
+      );
+    } catch (error: any) {
+      this.verificationCodes.delete(normalizedEmail);
+      throw new BadRequestException('Không thể gửi mã xác nhận đến email này, vui lòng kiểm tra lại');
+    }
+
+    return { message: 'Đã gửi mã xác nhận 6 số đến Gmail của bạn. Mã có hiệu lực trong 5 phút.' };
+  }
+
   async register(RegisterDto: RegisterDto) {
-    const checkUser = await this.userService.findOne(RegisterDto.TaiKhoan);
+    const taiKhoan = RegisterDto.TaiKhoan.trim();
+    const normalizedEmail = RegisterDto.Gmail.trim().toLowerCase();
+
+    // 1. Kiểm tra tài khoản đã tồn tại chưa
+    const checkUser = await this.userService.findOne(taiKhoan);
     if (checkUser) throw new BadRequestException('Tài khoản đã tồn tại');
+
+    // 2. Kiểm tra trùng Gmail
+    const checkGmail = await this.userRes.findOne({ where: { Gmail: normalizedEmail } });
+    if (checkGmail) throw new BadRequestException('Gmail này đã được sử dụng bởi một tài khoản khác');
+
+    // 3. Xác minh mã OTP 6 số
+    const stored = this.verificationCodes.get(normalizedEmail);
+    if (!stored) {
+      throw new BadRequestException('Vui lòng yêu cầu gửi mã xác nhận đến Gmail trước khi đăng ký');
+    }
+    if (Date.now() > stored.expiresAt) {
+      this.verificationCodes.delete(normalizedEmail);
+      throw new BadRequestException('Mã xác minh đã hết hạn, vui lòng gửi lại mã mới');
+    }
+    if (stored.code !== RegisterDto.MaXacThuc?.trim()) {
+      throw new BadRequestException('Mã xác minh không chính xác');
+    }
+
+    // Xác minh thành công -> xóa mã OTP đã dùng
+    this.verificationCodes.delete(normalizedEmail);
 
     const passHash = await bcrypt.hash(RegisterDto.MatKhau, 10);
     const newUser = this.userRes.create({
-      Gmail: RegisterDto.Gmail,
-      TaiKhoan: RegisterDto.TaiKhoan,
+      Gmail: normalizedEmail,
+      TaiKhoan: taiKhoan,
       MatKhau: passHash,
-      TenDayDu: RegisterDto.TenDayDu,
+      TenDayDu: RegisterDto.TenDayDu?.trim(),
       VaiTro: 'Sinh viên',
       DaHoanThienHoSo: true,
     });

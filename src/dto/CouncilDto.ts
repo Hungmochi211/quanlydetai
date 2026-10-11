@@ -72,9 +72,10 @@ export class CreateCouncilDto {
   @IsDateString({}, { message: 'Thời gian họp không hợp lệ' })
   ThoiGianHop?: string;
 
-  @ApiProperty({ enum: COUNCIL_MEETING_TYPES, example: 'offline' })
+  @ApiProperty({ required: false, enum: COUNCIL_MEETING_TYPES, example: 'offline' })
+  @IsOptional()
   @IsIn(COUNCIL_MEETING_TYPES, { message: 'Hình thức họp chỉ có thể là online hoặc offline' })
-  HinhThucHop!: (typeof COUNCIL_MEETING_TYPES)[number];
+  HinhThucHop?: (typeof COUNCIL_MEETING_TYPES)[number];
 
   @ApiProperty({ required: false, example: 'Phòng họp A2' })
   @IsOptional()

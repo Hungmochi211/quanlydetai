@@ -18,6 +18,14 @@ export class AuthCotroller {
     return this.authService.signIn(signInDto.TaiKhoan, signInDto.MatKhau);
   }
 
+  @Post('send-register-otp')
+  sendRegisterOtp(
+    @Body('gmail') gmail: string,
+    @Body('taiKhoan') taiKhoan?: string,
+  ) {
+    return this.authService.sendVerificationCode(gmail, taiKhoan);
+  }
+
   @Post('register')
   register(@Body() RegisterDto: RegisterDto) {
     return this.authService.register(RegisterDto);

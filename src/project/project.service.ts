@@ -218,6 +218,8 @@ export class ProjectService {
       TrangThai: 'Nháp',
       TienDo: 0,
       NgayTao: new Date(),
+      NgayBatDau: prDto.NgayBatDau ? new Date(prDto.NgayBatDau) : undefined,
+      NgayKetThuc: prDto.NgayKetThuc ? new Date(prDto.NgayKetThuc) : undefined,
     });
     await this.DTRes.save(project);
 
@@ -829,6 +831,8 @@ export class ProjectService {
     if (dto.PhanLoai !== undefined) project.PhanLoai = dto.PhanLoai;
     if (dto.idNguoiHD !== undefined) project.idNguoiHD = dto.idNguoiHD;
     if (dto.MoTa !== undefined) project.MoTa = dto.MoTa;
+    if (dto.NgayBatDau !== undefined) project.NgayBatDau = dto.NgayBatDau ? new Date(dto.NgayBatDau) : (null as any);
+    if (dto.NgayKetThuc !== undefined) project.NgayKetThuc = dto.NgayKetThuc ? new Date(dto.NgayKetThuc) : (null as any);
 
     return this.DTRes.save(project);
   }

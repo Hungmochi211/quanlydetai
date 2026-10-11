@@ -22,4 +22,11 @@ export class RegisterDto {
   @IsNotEmpty()
   @MaxLength(50)
   TenDayDu!: string;
+
+  @ApiProperty({ description: 'Mã xác minh 6 chữ số gửi về Gmail' })
+  @IsString()
+  @IsNotEmpty({ message: 'Vui lòng nhập mã xác minh' })
+  @MinLength(6, { message: 'Mã xác minh phải có 6 chữ số' })
+  @MaxLength(6, { message: 'Mã xác minh phải có 6 chữ số' })
+  MaXacThuc!: string;
 }

@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class RegisterTopicDto {
   @ApiProperty()
@@ -24,4 +24,10 @@ export class RegisterTopicDto {
 
   @ApiProperty()
   ThanhVienIds!: string[];
+
+  @ApiPropertyOptional()
+  NgayBatDau?: string | Date;
+
+  @ApiPropertyOptional()
+  NgayKetThuc?: string | Date;
 }
